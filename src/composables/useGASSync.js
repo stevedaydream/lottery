@@ -30,7 +30,10 @@ export function useGASSync(state) {
 
       const d = json.data || {}
       saveSkip = true
-      if (typeof d.participants === 'string')   state.participantsRaw.value = d.participants
+      if (typeof d.participants === 'string') {
+        state.participantsRaw.value = d.participants
+        lastFetchedParticipants = d.participants
+      }
       if (Array.isArray(d.prizes))              state.prizes.value         = d.prizes
       if (Array.isArray(d.winners))             state.allWinners.value     = d.winners
       if (typeof d.vipGuarantee === 'string')   state.vipGuarantee.value   = d.vipGuarantee
@@ -47,15 +50,55 @@ export function useGASSync(state) {
     }
   }
 
+  // 上次從 GAS fetch 回來時的參與者快照，用來判斷管理員「新增了誰」或「刪除了誰」
+  let lastFetchedParticipants = null
+
   // ── Save (local → GAS) ──
   function scheduleSave() {
     if (!GAS_URL || saveSkip) return
     clearTimeout(saveTimer)
-    saveTimer = setTimeout(() => {
+    saveTimer = setTimeout(async () => {
+      let mergedParticipants = state.participantsRaw.value
+
+      // 若有上次 fetch 快照，可精確計算管理員的異動，再與 GAS 最新狀態合併
+      // 目的：保留表單新報名者，同時尊重管理員的新增/刪除
+      if (lastFetchedParticipants !== null) {
+        try {
+          const res  = await fetch(`${GAS_URL}?action=get`, { redirect: 'follow' })
+          const json = await res.json()
+          if (json.ok && typeof json.data?.participants === 'string') {
+            const gasNames      = new Set(json.data.participants.split('\n').map(s => s.trim()).filter(Boolean))
+            const fetchedNames  = new Set(lastFetchedParticipants.split('\n').map(s => s.trim()).filter(Boolean))
+            const localNames    = new Set(state.participantsRaw.value.split('\n').map(s => s.trim()).filter(Boolean))
+
+            // 管理員主動刪除的人 = 上次 fetch 有、現在本地沒有
+            const adminRemoved = new Set([...fetchedNames].filter(n => !localNames.has(n)))
+            // 管理員主動新增的人 = 上次 fetch 沒有、現在本地有
+            const adminAdded   = new Set([...localNames].filter(n => !fetchedNames.has(n)))
+
+            // 結果 = (GAS 名單 ∪ 管理員新增) - 管理員刪除
+            const merged = [...new Set([...gasNames, ...adminAdded])].filter(n => !adminRemoved.has(n))
+            mergedParticipants = merged.join('\n')
+
+            // 靜默同步回本地顯示
+            if (mergedParticipants !== state.participantsRaw.value) {
+              saveSkip = true
+              state.participantsRaw.value = mergedParticipants
+              lastFetchedParticipants = mergedParticipants
+              saveSkip = false
+            } else {
+              lastFetchedParticipants = mergedParticipants
+            }
+          }
+        } catch {
+          // 合併失敗就用本地值，不阻塞存檔
+        }
+      }
+
       const body = JSON.stringify({
         action: 'save',
         data: {
-          participants: state.participantsRaw.value,
+          participants: mergedParticipants,
           prizes:       state.prizes.value,
           winners:      state.allWinners.value,
           vipGuarantee: state.vipGuarantee.value,
@@ -64,7 +107,6 @@ export function useGASSync(state) {
           eventTitle:   state.eventTitle.value,
         },
       })
-      // no-cors: GAS still processes the request, we just can't read the response
       fetch(GAS_URL, { method: 'POST', body, mode: 'no-cors' })
         .then(() => { lastSync.value = new Date() })
         .catch(() => {})

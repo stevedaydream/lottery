@@ -17,29 +17,38 @@
 
     <!-- Draw count control -->
     <div class="draw-count-ctrl">
-      <button class="count-btn" @click="drawCount = Math.max(1, drawCount - 1)">－</button>
+      <button class="count-btn" @click="drawCount = Math.max(1, drawCount - 1)" :disabled="remoteIsSpinning">－</button>
       <span class="count-display">{{ drawCount }}</span>
-      <button class="count-btn" @click="drawCount = Math.min(maxCount, drawCount + 1)">＋</button>
+      <button class="count-btn" @click="drawCount = Math.min(maxCount, drawCount + 1)" :disabled="remoteIsSpinning">＋</button>
       <span class="count-label-sm">位</span>
     </div>
     <div class="count-presets">
       <button v-for="n in [3,5,10]" :key="n"
         class="preset-btn"
         :class="{ active: drawCount === n }"
-        :disabled="n > maxCount"
+        :disabled="n > maxCount || remoteIsSpinning"
         @click="drawCount = n">
         {{ n }}
       </button>
     </div>
 
-    <button class="big-red-btn" @pointerdown="triggerDraw" :disabled="!remoteConnected || !canRemoteDraw">
-      <span>抽獎</span>
+    <!-- Big draw button: show spinning state #19 -->
+    <button class="big-red-btn"
+      :class="{ spinning: remoteIsSpinning }"
+      @pointerdown="triggerDraw"
+      :disabled="!remoteConnected || !canRemoteDraw || remoteIsSpinning">
+      <span v-if="remoteIsSpinning" class="btn-spinner"></span>
+      <span v-else>抽獎</span>
     </button>
 
+    <!-- Status + reconnect countdown #17 -->
     <div class="remote-status">
       <div class="status-dot" :class="remoteConnected ? 'connected' : remoteError ? 'error' : 'waiting'"></div>
       <span :class="remoteConnected ? 'remote-connected' : remoteError ? 'remote-error' : ''">
         {{ remoteConnected ? '已連線至主機' : remoteError || '連線中...' }}
+      </span>
+      <span v-if="!remoteConnected && reconnectCountdown > 0" class="reconnect-hint">
+        · {{ reconnectCountdown }}s 後重試
       </span>
     </div>
   </div>
@@ -53,7 +62,7 @@ const props = defineProps({
   targetId: { type: String, required: true }
 })
 
-const { remoteConnected, remoteError, remoteState, init, sendDraw, destroy } = useRemotePeer(props.targetId)
+const { remoteConnected, remoteError, remoteState, remoteIsSpinning, reconnectCountdown, init, sendDraw, destroy } = useRemotePeer(props.targetId)
 
 const drawCount = ref(1)
 
@@ -68,6 +77,7 @@ const canRemoteDraw = computed(() => {
 })
 
 function triggerDraw() {
+  if (remoteIsSpinning.value) return
   sendDraw(drawCount.value)
 }
 
@@ -145,7 +155,8 @@ onUnmounted(destroy)
   align-items: center;
   justify-content: center;
 }
-.count-btn:active { background: rgba(255, 215, 0, 0.18); }
+.count-btn:active:not(:disabled) { background: rgba(255, 215, 0, 0.18); }
+.count-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .count-display {
   font-family: 'Bebas Neue', sans-serif;
   font-size: 2rem;
@@ -189,8 +200,11 @@ onUnmounted(destroy)
   font-size: 2rem;
   letter-spacing: 0.2em;
   cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: transform 0.1s, box-shadow 0.1s, opacity 0.2s;
   margin: 8px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .big-red-btn:active:not(:disabled) {
   transform: scale(0.95);
@@ -200,6 +214,25 @@ onUnmounted(destroy)
   opacity: 0.4;
   cursor: not-allowed;
 }
+.big-red-btn.spinning {
+  animation: btn-pulse 1s ease-in-out infinite;
+  cursor: not-allowed;
+}
+@keyframes btn-pulse {
+  0%, 100% { box-shadow: 0 0 32px rgba(255,80,80,0.5); }
+  50%       { box-shadow: 0 0 52px rgba(255,80,80,0.8), 0 0 80px rgba(255,80,80,0.3); }
+}
+
+/* Spinner inside button */
+.btn-spinner {
+  width: 36px;
+  height: 36px;
+  border: 4px solid rgba(255,255,255,0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Status */
 .remote-status {
@@ -208,6 +241,12 @@ onUnmounted(destroy)
   gap: 8px;
   font-size: 0.82rem;
   color: rgba(255,255,255,0.5);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.reconnect-hint {
+  color: rgba(255,165,0,0.7);
+  font-size: 0.78rem;
 }
 .status-dot {
   width: 8px;

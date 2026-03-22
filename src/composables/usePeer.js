@@ -20,7 +20,7 @@ export function useHostPeer(onDrawCommand) {
   let peer = null
   let activeConn = null
 
-  // 推送當前抽獎狀態到遙控器
+  // 推送當前抽獎狀態到遙控器（含 spinning 狀態）
   function pushState(state) {
     if (activeConn && peerConnected.value) {
       try { activeConn.send({ type: 'STATE', ...state }) } catch {}
@@ -65,24 +65,56 @@ export function useHostPeer(onDrawCommand) {
 }
 
 export function useRemotePeer(targetId) {
-  const remoteConnected = ref(false)
-  const remoteError     = ref('')
-  const remoteState     = ref(null) // { prize, remaining }
+  const remoteConnected    = ref(false)
+  const remoteError        = ref('')
+  const remoteState        = ref(null)    // { prize, remaining }
+  const remoteIsSpinning   = ref(false)
+  const reconnectCountdown = ref(0)
   let remotePeer = null
   let remoteConn = null
+  let reconnectTick = null
+
+  function scheduleReconnect() {
+    if (reconnectTick) clearInterval(reconnectTick)
+    reconnectCountdown.value = 5
+    reconnectTick = setInterval(() => {
+      reconnectCountdown.value--
+      if (reconnectCountdown.value <= 0) {
+        clearInterval(reconnectTick)
+        reconnectTick = null
+        if (remotePeer && !remotePeer.destroyed) openConn()
+      }
+    }, 1000)
+  }
+
+  function openConn() {
+    remoteConn = remotePeer.connect(targetId, { reliable: true })
+    remoteConn.on('open', () => {
+      remoteConnected.value = true
+      remoteError.value = ''
+      reconnectCountdown.value = 0
+      if (reconnectTick) { clearInterval(reconnectTick); reconnectTick = null }
+    })
+    remoteConn.on('close', () => {
+      remoteConnected.value = false
+      remoteIsSpinning.value = false
+      scheduleReconnect()
+    })
+    remoteConn.on('data', data => {
+      if (data?.type === 'STATE') {
+        remoteState.value = data
+        remoteIsSpinning.value = data.spinning ?? false
+      }
+    })
+    remoteConn.on('error', err => { remoteError.value = err.message })
+  }
 
   function init() {
     remotePeer = new Peer(PEER_CONFIG)
 
     remotePeer.on('open', () => {
       remoteError.value = ''
-      remoteConn = remotePeer.connect(targetId, { reliable: true })
-      remoteConn.on('open',  () => { remoteConnected.value = true })
-      remoteConn.on('close', () => { remoteConnected.value = false })
-      remoteConn.on('data',  data => {
-        if (data?.type === 'STATE') remoteState.value = data
-      })
-      remoteConn.on('error', err => { remoteError.value = err.message })
+      openConn()
     })
 
     remotePeer.on('error', err => {
@@ -92,6 +124,7 @@ export function useRemotePeer(targetId) {
         'server-error':     '伺服器錯誤，請稍後重試',
       }
       remoteError.value = msg[err.type] || `連線錯誤：${err.type}`
+      if (err.type === 'network' || err.type === 'server-error') scheduleReconnect()
     })
   }
 
@@ -100,8 +133,9 @@ export function useRemotePeer(targetId) {
   }
 
   function destroy() {
+    if (reconnectTick) clearInterval(reconnectTick)
     if (remotePeer) { remotePeer.destroy(); remotePeer = null }
   }
 
-  return { remoteConnected, remoteError, remoteState, init, sendDraw, destroy }
+  return { remoteConnected, remoteError, remoteState, remoteIsSpinning, reconnectCountdown, init, sendDraw, destroy }
 }

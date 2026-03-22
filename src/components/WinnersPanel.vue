@@ -8,11 +8,7 @@
       <div class="winner-item" v-for="w in [...winners].reverse()" :key="w.id">
         <div class="winner-prize">{{ w.prize }}</div>
         <div class="winner-name">{{ w.name }}</div>
-        <div v-if="w.vip" class="winner-vip">VIP</div>
       </div>
-    </div>
-    <div v-if="winners.length" style="margin-top:10px;text-align:center;">
-      <button @click="$emit('clear')" style="font-size:0.75rem;color:#666;background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:4px;">清除記錄</button>
     </div>
   </div>
 </template>
@@ -21,5 +17,4 @@
 defineProps({
   winners: { type: Array, default: () => [] },
 })
-defineEmits(['clear'])
 </script>

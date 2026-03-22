@@ -6,7 +6,6 @@
 
       <!-- 單人 -->
       <template v-if="winners.length === 1">
-        <div v-if="winners[0].isVip" class="modal-vip-badge">✦ VIP 保送 ✦</div>
         <div class="modal-winner-name">{{ winners[0].name }}</div>
         <div class="modal-winner-sub">恭喜 · CONGRATULATIONS</div>
       </template>
@@ -17,7 +16,6 @@
           <div v-for="(w, i) in winners" :key="i" class="multi-item">
             <span class="multi-idx">{{ i + 1 }}</span>
             <span class="multi-name">{{ w.name }}</span>
-            <span v-if="w.isVip" class="multi-vip">✦ VIP</span>
           </div>
         </div>
         <div class="modal-winner-sub">恭喜以上得獎者 · CONGRATULATIONS</div>

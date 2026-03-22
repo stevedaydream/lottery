@@ -45,6 +45,7 @@ function rebuild() {
   }, 50)
 }
 
+// 參與者名單變動時自動重建（非抽獎中）
 watch(() => props.participants, () => {
   if (!props.isSpinning) rebuild()
 })
@@ -58,5 +59,5 @@ onMounted(() => {
 
 onUnmounted(destroy)
 
-defineExpose({ setSwirl, getBodies })
+defineExpose({ setSwirl, getBodies, rebuild })
 </script>

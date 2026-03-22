@@ -37,6 +37,8 @@ export function useSharedState() {
     vipGuarantee:    storedRef('lottery_vip_guarantee',  ''),
     vipExclude:      storedRef('lottery_vip_exclude',    ''),
     employeeList:    storedRef('lottery_employee_list',  ''),
-    eventTitle:      storedRef('lottery_event_title',    '尾牙抽獎大會'),
+    dutyList:             storedRef('lottery_duty_list',             ''),
+    registrationDeadline: storedRef('lottery_registration_deadline', ''),
+    eventTitle:           storedRef('lottery_event_title',           '尾牙抽獎大會'),
   }
 }

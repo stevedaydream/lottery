@@ -223,6 +223,22 @@
       color: #555;
       line-height: 1.6;
     }
+    .copy-btn {
+      width: 100%;
+      padding: 11px;
+      background: rgba(255,215,0,0.1);
+      border: 1px solid rgba(255,215,0,0.35);
+      border-radius: 10px;
+      color: var(--gold);
+      font-family: 'Noto Serif TC', serif;
+      font-weight: 700;
+      font-size: 0.95rem;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+      margin-bottom: 10px;
+    }
+    .copy-btn:hover { background: rgba(255,215,0,0.2); }
   </style>
 </head>
 <body>
@@ -308,21 +324,48 @@
         const checkUrl = CHECK_BASE_URL + '?check=' + encodeURIComponent(code)
         const codeHtml = code
           ? '<div class="check-block">' +
-              '<div class="check-block-title">📋 您的專屬兌獎碼（請截圖或記下）</div>' +
-              '<div class="claim-code-display">' + code + '</div>' +
-              '<div class="claim-code-hint">現場出示此畫面給工作人員掃描核對</div>' +
+              '<div class="check-block-title">📋 您的專屬兌獎碼</div>' +
+              '<div class="claim-code-display" id="code-display">' + code + '</div>' +
+              '<button class="copy-btn" onclick="copyCode(\'' + code + '\')" id="copy-btn">複製兌獎碼</button>' +
+              '<div class="claim-code-hint" style="margin-top:6px">抽獎結束後憑此碼查詢及兌獎</div>' +
               '<a class="check-link-btn" href="' + checkUrl + '" target="_blank">🔍 查詢我的中獎狀態 →</a>' +
-              '<div class="check-save-hint">⚠ 請將此頁面截圖存檔<br>連結僅限本人查詢，請勿分享</div>' +
+              '<div class="check-save-hint">⚠ 請將此頁面截圖存檔，或複製兌獎碼備用<br>關閉此頁後可重新送出報名表單取回兌獎碼</div>' +
             '</div>'
           : ''
 
         resultDiv.innerHTML = '<span class="success-icon">🎉</span>' + result.message + codeHtml
+
+        // 自動捲到兌獎碼區塊
+        setTimeout(function() {
+          resultDiv.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 100)
       } else {
         resultDiv.className = 'result error'
         resultDiv.textContent = result.message
         btn.disabled = false
         btn.textContent = '送出報名'
       }
+    }
+
+    function copyCode(code) {
+      navigator.clipboard.writeText(code).then(function() {
+        var btn = document.getElementById('copy-btn')
+        btn.textContent = '✓ 已複製'
+        btn.style.background = '#4caf50'
+        setTimeout(function() {
+          btn.textContent = '複製兌獎碼'
+          btn.style.background = ''
+        }, 2000)
+      }).catch(function() {
+        // fallback for older browsers
+        var el = document.getElementById('code-display')
+        var range = document.createRange()
+        range.selectNode(el)
+        window.getSelection().removeAllRanges()
+        window.getSelection().addRange(range)
+        document.execCommand('copy')
+        window.getSelection().removeAllRanges()
+      })
     }
   </script>
 </body>

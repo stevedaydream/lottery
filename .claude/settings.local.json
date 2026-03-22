@@ -10,7 +10,8 @@
       "Bash(netlify deploy:*)",
       "Bash(clasp push:*)",
       "Bash(clasp deploy:*)",
-      "Bash(npx netlify-cli:*)"
+      "Bash(npx netlify-cli:*)",
+      "Bash(echo \"EXIT:$?\")"
     ]
   }
 }

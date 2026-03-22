@@ -21,14 +21,15 @@
     <div v-else class="admin-panel">
       <div class="admin-header">
         <div class="admin-title">⚙ 抽獎管理後台</div>
-        <div class="sync-status">
+        <div class="sync-status" :class="{ 'sync-error-highlight': syncErr }">
           <span v-if="syncing" class="sync-dot syncing">⟳</span>
           <span v-else-if="syncErr" class="sync-dot err" :title="syncErr">!</span>
           <span v-else-if="lastSync" class="sync-dot ok" title="已同步">✓</span>
           <span v-if="!syncing" class="sync-label" @click="fetchAll" style="cursor:pointer;" title="點擊重新同步">
-            {{ syncErr ? 'GAS 錯誤' : lastSync ? `${lastSync.toLocaleTimeString()} 同步` : 'GAS 未設定' }}
+            {{ syncErr ? 'GAS 同步失敗，點擊重試' : lastSync ? `${lastSync.toLocaleTimeString()} 同步` : 'GAS 未設定' }}
           </span>
         </div>
+        <a class="vip-entry-link" :href="vipPageUrl" target="_blank" title="VIP 黑箱設定">✦ VIP</a>
         <div class="admin-user">{{ userEmail }}</div>
         <button class="logout-btn" @click="logout">登出</button>
       </div>
@@ -49,9 +50,11 @@
 
       <!-- ── 遙控器 ── -->
       <div v-if="activeTab === 'remote'" class="tab-content">
-        <div class="section-title">手機遙控器</div>
         <div class="remote-area">
+
+          <!-- QR Code 區塊 -->
           <div class="qr-block">
+            <div class="section-title" style="margin-bottom:12px">手機遙控器</div>
             <img v-if="remoteQrUrl" :src="remoteQrUrl" alt="Remote QR" class="qr-img" />
             <div v-else class="qr-placeholder">等待主畫面初始化…</div>
             <div class="conn-status">
@@ -59,11 +62,58 @@
               <span>{{ remoteConnected ? '手機已連線' : '等待手機掃描' }}</span>
             </div>
             <div class="peer-id-box">ID: {{ remotePeerId || '初始化中...' }}</div>
+            <div class="hint" style="margin:0;text-align:center">掃描 QR Code 開啟手機遙控</div>
           </div>
-          <div class="remote-hint">
-            <p>掃描上方 QR Code 以開啟手機遙控器</p>
-            <p>手機連線後可遠端觸發抽獎</p>
+
+          <!-- 後台直接控制區塊 -->
+          <div class="admin-remote-ctrl">
+            <div class="section-title" style="margin-bottom:12px">後台直接控制</div>
+
+            <!-- 當前獎項資訊 -->
+            <div class="admin-prize-info" :class="{ 'no-data': !adminPeerState }">
+              <template v-if="adminPeerState">
+                <span class="admin-prize-name">{{ adminPeerState.prize }}</span>
+                <span class="admin-prize-rem" v-if="adminPeerState.remaining > 0">剩餘 <b>{{ adminPeerState.remaining }}</b> 名</span>
+                <span class="admin-prize-rem all-done" v-else>全數抽出</span>
+              </template>
+              <span v-else style="color:var(--text-muted);font-size:0.82rem">等待主畫面同步...</span>
+            </div>
+
+            <!-- 抽出人數 -->
+            <div class="admin-count-row">
+              <span class="count-label-sm">抽出</span>
+              <button class="admin-count-btn" @click="adminDrawCount = Math.max(1, adminDrawCount - 1)" :disabled="adminIsSpinning">－</button>
+              <span class="admin-count-display">{{ adminDrawCount }}</span>
+              <button class="admin-count-btn" @click="adminDrawCount = Math.min(adminMaxCount, adminDrawCount + 1)" :disabled="adminIsSpinning">＋</button>
+              <span class="count-label-sm">位</span>
+              <div style="display:flex;gap:4px;margin-left:4px;">
+                <button v-for="n in [3,5,10]" :key="n"
+                  class="preset-btn"
+                  :class="{ active: adminDrawCount === n }"
+                  :disabled="adminIsSpinning || n > adminMaxCount"
+                  @click="adminDrawCount = n">{{ n }}</button>
+              </div>
+            </div>
+
+            <!-- 抽獎按鈕 -->
+            <button class="admin-draw-btn"
+              :class="{ spinning: adminIsSpinning }"
+              :disabled="!adminPeerConnected || !adminCanDraw || adminIsSpinning"
+              @click="adminSendDraw(adminDrawCount)">
+              <span v-if="adminIsSpinning" class="btn-spinner-sm"></span>
+              <span v-else>🎰 開始抽獎</span>
+            </button>
+
+            <!-- 連線狀態 -->
+            <div class="admin-peer-status">
+              <div class="status-dot" :class="adminPeerConnected ? 'connected' : adminPeerError ? 'error' : 'waiting'"></div>
+              <span>{{ adminPeerConnected ? '已連線至主畫面' : adminPeerError || '連線中...' }}</span>
+              <span v-if="!adminPeerConnected && adminReconnectCountdown > 0" style="color:rgba(255,165,0,0.7);font-size:0.75rem">
+                · {{ adminReconnectCountdown }}s 後重試
+              </span>
+            </div>
           </div>
+
         </div>
       </div>
 
@@ -82,6 +132,16 @@
             <p>員工掃描 QR Code 後填寫姓名、單位、桌號（選填）送出報名</p>
             <p>系統自動比對員工白名單並防止重複投入</p>
             <p style="color:var(--gold-dark);margin-top:8px;">※ 表單提示使用中文姓名填寫</p>
+
+            <!-- 報名截止時間 -->
+            <div class="deadline-row">
+              <label class="deadline-label">報名截止時間</label>
+              <input type="datetime-local" class="deadline-input" v-model="registrationDeadline" />
+              <button v-if="registrationDeadline" class="deadline-clear" @click="registrationDeadline = ''" title="清除截止時間">✕</button>
+            </div>
+            <div v-if="registrationDeadline" class="deadline-hint">
+              主畫面無參與者時將顯示倒數計時
+            </div>
           </div>
         </div>
 
@@ -89,7 +149,10 @@
 
         <!-- 員工白名單 -->
         <div class="section-header">
-          <div class="section-title" style="margin-bottom:0">員工白名單</div>
+          <div>
+            <div class="section-title" style="margin-bottom:2px">員工白名單</div>
+            <div class="hint" style="margin:0">可報名資格驗證用，留空則不驗證身分</div>
+          </div>
           <div style="display:flex;gap:8px;">
             <button class="action-btn" @click="downloadTemplate">⬇ 下載範本</button>
             <button class="action-btn gold" @click="$refs.excelInput.click()">⬆ 匯入 Excel</button>
@@ -97,22 +160,90 @@
           </div>
         </div>
         <div class="hint" style="margin-bottom:10px;">
-          每行一名，或匯入 Excel（欄位：姓名、單位）；留空則不驗證
+          每行一筆，格式：<code style="color:var(--gold-dark)">姓名,單位,值班</code>（例：<code style="color:var(--gold-dark)">王小明,9A,否</code>）<br>
+          值班欄填「是」表示當天值班；或匯入 Excel（欄位：姓名、單位、值班）
         </div>
         <div v-if="importMsg" class="import-msg" :class="importMsgType">{{ importMsg }}</div>
         <textarea class="admin-textarea" v-model="employeeList"
-          placeholder="每行一位員工中文姓名&#10;王小明&#10;李大華&#10;張美玲"></textarea>
+          placeholder="王小明,9A,否&#10;李大華,NP,是&#10;張美玲,門診,否"></textarea>
         <div class="count-info">共 {{ employeeCount }} 人</div>
 
         <div class="divider"></div>
 
         <!-- 抽獎名單（報名後自動填入） -->
-        <div class="section-title" style="margin-top:0">抽獎名單</div>
-        <div class="hint">員工報名後自動加入；亦可手動編輯，即時同步至主畫面</div>
+        <div class="section-header">
+          <div>
+            <div class="section-title" style="margin-bottom:2px">抽獎名單</div>
+            <div class="hint" style="margin:0">實際進入球池的參與者。員工報名後自動加入；亦可手動編輯</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button v-if="clearedParticipants !== null" class="action-btn" @click="undoClear" title="還原清空前的名單">
+              ↩ 復原
+            </button>
+            <button class="action-btn gold" :disabled="importingRegistered || !gasUrl" @click="importRegistered"
+              title="從 GAS 報名名單匯入所有已報名者">
+              {{ importingRegistered ? '匯入中...' : '📋 加入已報名者' }}
+            </button>
+            <button class="action-btn" @click="openDutyModal" :disabled="!employeeList">
+              🏥 值班人員
+            </button>
+            <button class="action-btn" :disabled="syncing" @click="fetchAll" title="從 GAS 拉取最新報名資料">
+              {{ syncing ? '同步中...' : '⟳ 重新整理' }}
+            </button>
+            <button class="action-btn danger" @click="clearParticipants" :disabled="!participantsRaw">
+              🗑 清空名單
+            </button>
+          </div>
+        </div>
         <textarea class="admin-textarea large" v-model="participantsRaw"
           placeholder="每行一名&#10;王小明&#10;李大華"></textarea>
-        <div class="count-info">共 {{ participantCount }} 人</div>
+        <div class="count-info">
+          共 {{ participantCount }} 人
+          <span v-if="dutyInParticipants.length" style="color:var(--gold-dark);margin-left:8px;">
+            · 值班 {{ dutyInParticipants.length }} 人
+          </span>
+        </div>
       </div>
+
+      <!-- ── 值班人員選取 Modal ── -->
+      <teleport to="body">
+        <div v-if="showDutyModal" class="modal-overlay" @click.self="showDutyModal = false">
+          <div class="duty-modal">
+            <div class="duty-modal-title">🏥 選取值班人員</div>
+            <div class="duty-modal-hint">勾選後儲存，將加入抽獎名單並標記值班</div>
+
+            <div class="duty-unit-list">
+              <div v-for="(members, unit) in employeeByUnit" :key="unit" class="duty-unit-group">
+                <div class="duty-unit-header">
+                  <label class="duty-unit-label">
+                    <input type="checkbox"
+                      :checked="isUnitAllSelected(unit, members)"
+                      :indeterminate.prop="isUnitPartial(unit, members)"
+                      @change="toggleUnit(unit, members, $event.target.checked)" />
+                    {{ unit }}
+                  </label>
+                  <span class="duty-unit-count">{{ selectedInUnit(unit, members) }}/{{ members.length }}</span>
+                </div>
+                <div class="duty-member-grid">
+                  <label v-for="m in members" :key="m.name" class="duty-member-item"
+                    :class="{ selected: dutySelected.has(m.name) }">
+                    <input type="checkbox" :value="m.name"
+                      :checked="dutySelected.has(m.name)"
+                      @change="toggleDutyMember(m.name, $event.target.checked)" />
+                    {{ m.name }}
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="duty-modal-footer">
+              <span class="duty-selected-count">已選 {{ dutySelected.size }} 人</span>
+              <button class="action-btn" @click="showDutyModal = false">取消</button>
+              <button class="action-btn gold" @click="saveDutySelection">儲存並加入名單</button>
+            </div>
+          </div>
+        </div>
+      </teleport>
 
       <!-- ── 獎項設定 ── -->
       <div v-if="activeTab === 'prizes'" class="tab-content">
@@ -156,8 +287,17 @@
       <div v-if="activeTab === 'claims'" class="tab-content">
         <div class="section-header">
           <div class="section-title">兌獎管理</div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <input class="claim-search" v-model="claimSearch" placeholder="搜尋姓名或獎項…" />
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <input class="claim-search" v-model="claimSearch" placeholder="搜尋姓名…" />
+            <select class="claim-filter-select" v-model="claimStatusFilter">
+              <option value="all">全部狀態</option>
+              <option value="unclaimed">未兌獎</option>
+              <option value="claimed">已兌獎</option>
+            </select>
+            <select class="claim-filter-select" v-model="claimPrizeFilter">
+              <option value="">全部獎項</option>
+              <option v-for="p in prizes" :key="p.id" :value="p.name">{{ p.name }}</option>
+            </select>
             <button class="action-btn" @click="loadClaimData" :disabled="claimLoading">↻ 刷新</button>
           </div>
         </div>
@@ -181,7 +321,7 @@
               class="claim-row"
               :class="{ 'is-claimed': isWinnerClaimed(w.name, w.prize) }"
             >
-              <span class="cl-name">{{ w.name }}<span v-if="w.vip" class="cl-vip">✦</span></span>
+              <span class="cl-name">{{ w.name }}</span>
               <span class="cl-unit">{{ getRegistration(w.name)?.unit || '—' }}</span>
               <span class="cl-prize">{{ w.prize }}</span>
               <span class="cl-action">
@@ -206,7 +346,7 @@
         <div class="section-header">
           <div class="section-title">中獎名單</div>
           <div style="display:flex;gap:8px;">
-            <button v-if="allWinners.length" class="action-btn" @click="exportCSV">匯出 CSV</button>
+            <button v-if="allWinners.length" class="action-btn gold export-btn" @click="exportCSV">⬇ 匯出 CSV</button>
             <button v-if="allWinners.length" class="action-btn danger" @click="clearWinners">清除全部</button>
           </div>
         </div>
@@ -219,7 +359,7 @@
             <span class="cell-num">{{ allWinners.length - i }}</span>
             <span class="cell-name">{{ w.name }}</span>
             <span class="cell-prize">{{ w.prize }}</span>
-            <span class="cell-vip">{{ w.vip ? '✦ VIP' : '' }}</span>
+            <span class="cell-vip"></span>
           </div>
         </div>
       </div>
@@ -232,9 +372,10 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import * as XLSX from 'xlsx'
 import { useSharedState } from '../composables/useSharedState'
 import { useGASSync } from '../composables/useGASSync'
+import { useRemotePeer } from '../composables/usePeer'
 
 const sharedState = useSharedState()
-const { participantsRaw, prizes, allWinners, vipGuarantee, vipExclude, employeeList, eventTitle } = sharedState
+const { participantsRaw, prizes, allWinners, vipGuarantee, vipExclude, employeeList, dutyList, registrationDeadline, eventTitle } = sharedState
 const { syncing, syncErr, lastSync, fetchAll } = useGASSync(sharedState)
 
 const clientId   = import.meta.env.VITE_GOOGLE_CLIENT_ID || ''
@@ -247,14 +388,14 @@ const formQrUrl  = computed(() =>
 const authed    = ref(false)
 const userEmail = ref('')
 const authError = ref('')
-const activeTab = ref('remote')
+const activeTab = ref('participants')
 
 const tabs = [
-  { key: 'remote',       label: '📱 遙控器' },
   { key: 'participants', label: '👥 名單匯入' },
   { key: 'prizes',       label: '🏆 獎項設定' },
   { key: 'claims',       label: '🎫 兌獎管理' },
   { key: 'winners',      label: '🎉 中獎名單' },
+  { key: 'remote',       label: '📱 遙控器' },
 ]
 
 // ── Remote control (reads peer ID stored by main display page) ──
@@ -266,18 +407,176 @@ window.addEventListener('storage', e => {
   if (e.key === 'lottery_peer_connected') remoteConnected.value = e.newValue === 'true'
 })
 
+// ── Admin 遙控器（直接連接主畫面，發送抽獎指令）──
+const {
+  remoteConnected: adminPeerConnected,
+  remoteError: adminPeerError,
+  remoteState: adminPeerState,
+  remoteIsSpinning: adminIsSpinning,
+  reconnectCountdown: adminReconnectCountdown,
+  init: initAdminPeer,
+  sendDraw: adminSendDraw,
+  destroy: destroyAdminPeer,
+} = useRemotePeer(remotePeerId.value)
+
+const adminDrawCount = ref(1)
+
+const adminMaxCount = computed(() => {
+  const rem = adminPeerState.value?.remaining ?? 99
+  return Math.max(1, rem)
+})
+
+const adminCanDraw = computed(() => {
+  if (!adminPeerState.value) return true
+  return adminPeerState.value.remaining > 0
+})
+
+// 切到遙控器 tab 時才初始化連線，離開時中斷
+// 切到名單 tab 時自動從 GAS 拉取最新報名資料
+watch(activeTab, (val, old) => {
+  if (val === 'remote' && remotePeerId.value) initAdminPeer()
+  if (old === 'remote') destroyAdminPeer()
+  if (val === 'participants') fetchAll()
+})
+
 const remoteQrUrl = computed(() => {
   if (!remotePeerId.value) return ''
   const remoteUrl = `${window.location.href.split('?')[0]}?remote=${remotePeerId.value}`
   return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(remoteUrl)}`
 })
 
+const vipPageUrl = computed(() => `${window.location.href.split('?')[0]}?vip`)
+
 const participantCount = computed(() =>
   participantsRaw.value.split('\n').map(s => s.trim()).filter(Boolean).length
 )
 const employeeCount = computed(() =>
-  employeeList.value.split('\n').map(s => s.trim()).filter(Boolean).length
+  employeeList.value.split('\n').map(s => s.split(',')[0].trim()).filter(Boolean).length
 )
+
+// ── 值班人員 Modal ──
+const showDutyModal = ref(false)
+const dutySelected  = ref(new Set())
+
+// 解析員工白名單為物件陣列
+const employeeEntries = computed(() =>
+  employeeList.value.split('\n')
+    .map(line => {
+      const parts = line.split(',').map(s => s.trim())
+      return { name: parts[0], unit: parts[1] || '未分類', duty: parts[2] || '' }
+    })
+    .filter(e => e.name)
+)
+
+// 按單位分組（保持插入順序）
+const employeeByUnit = computed(() => {
+  const groups = {}
+  employeeEntries.value.forEach(e => {
+    if (!groups[e.unit]) groups[e.unit] = []
+    groups[e.unit].push(e)
+  })
+  return groups
+})
+
+// 目前參與者中有值班標記的人
+const dutyInParticipants = computed(() => {
+  const dutyNames = new Set(dutyList.value.split('\n').map(s => s.trim()).filter(Boolean))
+  return participantsRaw.value.split('\n').map(s => s.trim()).filter(n => dutyNames.has(n))
+})
+
+function openDutyModal() {
+  // 預選：已存在 dutyList 中的人
+  const existing = new Set(dutyList.value.split('\n').map(s => s.trim()).filter(Boolean))
+  dutySelected.value = new Set(existing)
+  showDutyModal.value = true
+}
+
+function toggleDutyMember(name, checked) {
+  const s = new Set(dutySelected.value)
+  checked ? s.add(name) : s.delete(name)
+  dutySelected.value = s
+}
+
+function isUnitAllSelected(unit, members) {
+  return members.length > 0 && members.every(m => dutySelected.value.has(m.name))
+}
+function isUnitPartial(unit, members) {
+  const count = members.filter(m => dutySelected.value.has(m.name)).length
+  return count > 0 && count < members.length
+}
+function selectedInUnit(unit, members) {
+  return members.filter(m => dutySelected.value.has(m.name)).length
+}
+function toggleUnit(unit, members, checked) {
+  const s = new Set(dutySelected.value)
+  members.forEach(m => checked ? s.add(m.name) : s.delete(m.name))
+  dutySelected.value = s
+}
+
+function saveDutySelection() {
+  const selected = [...dutySelected.value]
+
+  // 更新 dutyList（完整替換）
+  dutyList.value = selected.join('\n')
+
+  // 將選取的人加入抽獎名單（去重）
+  const existing = new Set(participantsRaw.value.split('\n').map(s => s.trim()).filter(Boolean))
+  const toAdd    = selected.filter(n => !existing.has(n))
+  if (toAdd.length > 0) {
+    participantsRaw.value = [...existing, ...toAdd].join('\n')
+  }
+
+  showDutyModal.value = false
+}
+
+// ── 清空參與者 / 復原 ──
+const clearedParticipants = ref(null)
+
+function clearParticipants() {
+  if (!participantsRaw.value.trim()) return
+  clearedParticipants.value = participantsRaw.value
+  participantsRaw.value = ''
+}
+
+function undoClear() {
+  participantsRaw.value = clearedParticipants.value
+  clearedParticipants.value = null
+}
+
+// ── 從 GAS 報名名單匯入已報名者 ──
+const importingRegistered = ref(false)
+
+async function importRegistered() {
+  if (!gasUrl || importingRegistered.value) return
+  importingRegistered.value = true
+  try {
+    const res  = await fetch(`${gasUrl}?action=get`, { redirect: 'follow' })
+    const json = await res.json()
+    if (!json.ok) throw new Error(json.error || 'GAS 錯誤')
+
+    const registrations = json.data?.registrations || []
+    if (registrations.length === 0) {
+      alert('目前尚無報名記錄')
+      return
+    }
+
+    const existing = new Set(participantsRaw.value.split('\n').map(s => s.trim()).filter(Boolean))
+    const toAdd    = registrations.map(r => r.name).filter(n => n && !existing.has(n))
+
+    if (toAdd.length === 0) {
+      alert('所有已報名者都已在名單中')
+      return
+    }
+
+    const merged = [...existing, ...toAdd]
+    participantsRaw.value = merged.join('\n')
+    alert(`已加入 ${toAdd.length} 人，合計 ${merged.length} 人`)
+  } catch (err) {
+    alert('匯入失敗：' + err.message)
+  } finally {
+    importingRegistered.value = false
+  }
+}
 
 // ── Excel 匯入 / 範本下載 ──
 const importMsg     = ref('')
@@ -285,12 +584,15 @@ const importMsgType = ref('ok')
 
 function downloadTemplate() {
   const ws = XLSX.utils.aoa_to_sheet([
-    ['姓名', '單位'],
-    ['王小明', '9A'],
-    ['李大華', '8A'],
-    ['張美玲', '門診'],
+    ['姓名', '單位', '值班'],
+    ['王小明', '9A',  '否'],
+    ['李大華', '8A',  '否'],
+    ['張美玲', '門診', '是'],
+    ['陳小花', 'NP',  '否'],
+    ['林大偉', 'VS',  '否'],
+    ['黃雅婷', '開刀房', '否'],
   ])
-  ws['!cols'] = [{ wch: 14 }, { wch: 10 }]
+  ws['!cols'] = [{ wch: 14 }, { wch: 10 }, { wch: 6 }]
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '員工名單')
   XLSX.writeFile(wb, '員工白名單範本.xlsx')
@@ -308,33 +610,47 @@ function importExcel(e) {
       const ws   = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
 
-      // Find 姓名 column index (header row or default to col 0)
-      let nameCol = 0
+      // 找欄位索引（支援中英文標題）
+      let nameCol = 0, unitCol = -1, dutyCol = -1
       if (rows.length > 0) {
         const header = rows[0].map(c => String(c).trim())
-        const idx = header.findIndex(h => h === '姓名' || h === 'name' || h === 'Name')
-        if (idx !== -1) nameCol = idx
+        const ni = header.findIndex(h => h === '姓名' || h === 'name' || h === 'Name')
+        const ui = header.findIndex(h => h === '單位' || h === 'unit' || h === 'Unit')
+        const di = header.findIndex(h => h === '值班' || h === 'duty' || h === 'Duty')
+        if (ni !== -1) nameCol = ni
+        if (ui !== -1) unitCol = ui
+        if (di !== -1) dutyCol = di
       }
 
-      // Extract names (skip header row if it contains 姓名)
-      const startRow = String(rows[0]?.[nameCol]).trim() === '姓名' ? 1 : 0
-      const names = rows
+      // 判斷是否有標題行
+      const startRow = /[\u4e00-\u9fa5]/.test(String(rows[0]?.[nameCol])) ? 0 : 1
+      const entries = rows
         .slice(startRow)
-        .map(r => String(r[nameCol] ?? '').trim())
-        .filter(n => n && /[\u4e00-\u9fa5]/.test(n)) // Chinese chars only
+        .map(r => ({
+          name: String(r[nameCol] ?? '').trim(),
+          unit: unitCol !== -1 ? String(r[unitCol] ?? '').trim() : '',
+          duty: dutyCol !== -1 ? String(r[dutyCol] ?? '').trim() : '',
+        }))
+        .filter(e => e.name && /[\u4e00-\u9fa5]/.test(e.name))
 
-      if (names.length === 0) {
+      if (entries.length === 0) {
         importMsg.value = '未找到有效的中文姓名，請確認欄位格式'
         importMsgType.value = 'err'
         return
       }
 
-      // Merge with existing (deduplicate)
-      const existing = employeeList.value.split('\n').map(s => s.trim()).filter(Boolean)
-      const merged   = [...new Set([...existing, ...names])]
-      employeeList.value = merged.join('\n')
+      // 合併：以姓名去重
+      const existingNames = new Set(
+        employeeList.value.split('\n').map(l => l.split(',')[0].trim()).filter(Boolean)
+      )
+      const newEntries = entries.filter(e => !existingNames.has(e.name))
+      const allLines = [
+        ...employeeList.value.split('\n').filter(l => l.trim()),
+        ...newEntries.map(e => [e.name, e.unit, e.duty].join(',')),
+      ]
+      employeeList.value = allLines.join('\n')
 
-      importMsg.value = `成功匯入 ${names.length} 筆，合計 ${merged.length} 人`
+      importMsg.value = `成功匯入 ${newEntries.length} 筆，合計 ${allLines.length} 人`
       importMsgType.value = 'ok'
     } catch {
       importMsg.value = '檔案格式錯誤，請使用範本重新匯入'
@@ -461,14 +777,21 @@ const claimSearch    = ref('')
 const claimLoading   = ref(false)
 const claimLoadErr   = ref('')
 
+const claimStatusFilter = ref('all')  // 'all' | 'unclaimed' | 'claimed'
+const claimPrizeFilter  = ref('')
+
 const claimedCount = computed(() =>
   allWinners.value.filter(w => isWinnerClaimed(w.name, w.prize)).length
 )
 
 const filteredWinnersForClaim = computed(() => {
+  let list = allWinners.value
   const q = claimSearch.value.trim()
-  if (!q) return allWinners.value
-  return allWinners.value.filter(w => w.name.includes(q) || w.prize.includes(q))
+  if (q) list = list.filter(w => w.name.includes(q) || w.prize.includes(q))
+  if (claimPrizeFilter.value) list = list.filter(w => w.prize === claimPrizeFilter.value)
+  if (claimStatusFilter.value === 'claimed')   list = list.filter(w => isWinnerClaimed(w.name, w.prize))
+  if (claimStatusFilter.value === 'unclaimed') list = list.filter(w => !isWinnerClaimed(w.name, w.prize))
+  return list
 })
 
 function isWinnerClaimed(name, prize) {
@@ -832,6 +1155,113 @@ onMounted(() => {
   padding-top: 8px;
 }
 
+/* ── Admin remote control ── */
+.admin-remote-ctrl {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.admin-prize-info {
+  background: rgba(255,215,0,0.06);
+  border: 1px solid rgba(255,215,0,0.15);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.admin-prize-name {
+  font-family: 'Noto Serif TC', serif;
+  font-weight: 700;
+  color: var(--gold);
+  font-size: 1rem;
+  flex: 1;
+}
+.admin-prize-rem { font-size: 0.82rem; color: rgba(255,255,255,0.5); }
+.admin-prize-rem b { color: var(--gold); }
+.admin-prize-rem.all-done { color: rgba(255,255,255,0.25); }
+.admin-count-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.admin-count-btn {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,215,0,0.25);
+  background: rgba(255,215,0,0.06);
+  color: var(--gold);
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.admin-count-btn:hover:not(:disabled) { background: rgba(255,215,0,0.15); }
+.admin-count-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.admin-count-display {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.6rem;
+  color: var(--gold);
+  min-width: 30px;
+  text-align: center;
+}
+.admin-draw-btn {
+  padding: 14px;
+  border-radius: 12px;
+  border: 2px solid rgba(255,215,0,0.3);
+  background: linear-gradient(135deg, rgba(184,134,11,0.2), rgba(255,215,0,0.12));
+  color: var(--gold);
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.3rem;
+  letter-spacing: 0.15em;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.admin-draw-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(184,134,11,0.35), rgba(255,215,0,0.2));
+  border-color: var(--gold);
+}
+.admin-draw-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.admin-draw-btn.spinning { animation: draw-pulse 1s ease-in-out infinite; cursor: not-allowed; }
+@keyframes draw-pulse {
+  0%, 100% { border-color: rgba(255,215,0,0.3); }
+  50%       { border-color: var(--gold); box-shadow: 0 0 16px rgba(255,215,0,0.2); }
+}
+.btn-spinner-sm {
+  width: 18px; height: 18px;
+  border: 2px solid rgba(255,215,0,0.2);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+.admin-peer-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex-wrap: wrap;
+}
+.preset-btn {
+  padding: 3px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,215,0,0.2);
+  background: transparent;
+  color: var(--text-muted);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.preset-btn:hover:not(:disabled) { border-color: rgba(255,215,0,0.4); color: var(--text-light); }
+.preset-btn.active { background: rgba(255,215,0,0.12); border-color: var(--gold-dark); color: var(--gold); font-weight: 700; }
+.preset-btn:disabled { opacity: 0.2; cursor: not-allowed; }
+
 /* ── Participants tab ── */
 .admin-textarea {
   width: 100%;
@@ -1075,9 +1505,179 @@ onMounted(() => {
   transition: all 0.2s;
 }
 .action-btn:hover { background: rgba(255,255,255,0.12); color: var(--text-light); }
+.action-btn.danger { border-color: rgba(200,0,0,0.25); color: #cc6666; }
 .action-btn.danger:hover { background: rgba(200,0,0,0.2); border-color: rgba(200,0,0,0.4); color: #ff6666; }
 .action-btn.gold { border-color: rgba(255,215,0,0.25); color: var(--gold-dark); }
 .action-btn.gold:hover { background: rgba(255,215,0,0.1); border-color: var(--gold); color: var(--gold); }
+.export-btn { font-weight: 700; padding: 6px 18px; }
+
+/* 報名截止時間 */
+.deadline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.deadline-label { font-size: 0.8rem; color: var(--text-muted); white-space: nowrap; }
+.deadline-input {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,215,0,0.2);
+  border-radius: 8px;
+  color: var(--text-light);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 0.85rem;
+  padding: 6px 10px;
+  outline: none;
+  color-scheme: dark;
+}
+.deadline-input:focus { border-color: rgba(255,215,0,0.5); }
+.deadline-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 2px 6px;
+}
+.deadline-clear:hover { color: #ff6666; }
+.deadline-hint { font-size: 0.75rem; color: var(--gold-dark); margin-top: 4px; }
+
+/* Sync error highlight */
+.sync-error-highlight .sync-label { color: #ff6666; font-weight: 700; }
+
+/* ── 值班人員 Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+.duty-modal {
+  background: var(--card);
+  border: 1px solid rgba(255,215,0,0.2);
+  border-radius: 16px;
+  padding: 24px;
+  width: 90%;
+  max-width: 560px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.duty-modal-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+.duty-modal-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: -8px;
+}
+.duty-unit-list {
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.duty-unit-group {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.duty-unit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.duty-unit-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--gold-dark);
+  cursor: pointer;
+}
+.duty-unit-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+.duty-member-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.duty-member-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.duty-member-item:hover { background: rgba(255,255,255,0.07); }
+.duty-member-item.selected {
+  background: rgba(255,215,0,0.12);
+  border-color: rgba(255,215,0,0.4);
+  color: var(--gold);
+}
+.duty-member-item input { display: none; }
+.duty-modal-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.duty-selected-count {
+  flex: 1;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+/* VIP entry link */
+.vip-entry-link {
+  font-size: 0.75rem;
+  color: rgba(255,215,0,0.35);
+  text-decoration: none;
+  border: 1px solid rgba(255,215,0,0.12);
+  border-radius: 6px;
+  padding: 4px 10px;
+  transition: all 0.2s;
+  white-space: nowrap;
+  letter-spacing: 0.08em;
+}
+.vip-entry-link:hover { color: var(--gold-dark); border-color: rgba(255,215,0,0.3); background: rgba(255,215,0,0.05); }
+
+/* Claims filter select */
+.claim-filter-select {
+  background: var(--bg-card2);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: var(--text-light);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 0.82rem;
+  padding: 6px 10px;
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color 0.2s;
+}
+.claim-filter-select:focus { border-color: rgba(255,215,0,0.3); }
+.claim-filter-select option { background: #1a1a1a; }
 .import-msg {
   font-size: 0.8rem;
   padding: 8px 12px;

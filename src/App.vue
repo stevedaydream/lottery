@@ -45,54 +45,28 @@
         <ParticipantsPanel
           v-model="participantsRaw"
           :count="participantList.length"
+          :form-url="gasUrl"
+          :deadline="registrationDeadline"
         />
       </div>
 
-      <!-- CENTER: Canvas + Button -->
+      <!-- CENTER: Canvas -->
       <div style="display:flex;flex-direction:column;gap:16px;">
         <PhysicsCanvas
           ref="physicsCanvasRef"
-          :participants="participantList"
+          :participants="availableParticipants"
           :is-spinning="isSpinning"
           :countdown="countdown"
           :current-prize="currentPrize"
         />
-
-        <div class="draw-btn-wrap">
-          <button
-            class="draw-btn"
-            @click="startDraw"
-            :disabled="isSpinning || !canDraw"
-          >
-            <div class="btn-shine"></div>
-            {{ isSpinning ? '攪拌中...' : '開始抽獎' }}
-          </button>
-          <div class="draw-count-ctrl">
-            <span class="count-label-sm">抽出</span>
-            <button class="count-btn" @click="drawCount = Math.max(1, drawCount - 1)" :disabled="isSpinning">－</button>
-            <span class="count-display">{{ drawCount }}</span>
-            <button class="count-btn" @click="drawCount = Math.min(remainingSlots, drawCount + 1)" :disabled="isSpinning">＋</button>
-            <span class="count-label-sm">位</span>
-            <div class="count-presets">
-              <button v-for="n in [3,5,10]" :key="n"
-                class="preset-btn"
-                :class="{ active: drawCount === n }"
-                :disabled="isSpinning || n > remainingSlots"
-                @click="drawCount = n">
-                {{ n }}
-              </button>
-            </div>
-          </div>
-        </div>
-
         <div style="text-align:center;font-size:0.78rem;color:var(--text-muted);letter-spacing:0.1em;">
-          {{ canDraw ? `點擊按鈕或使用手機遙控 · 當前獎項：${currentPrize?.name ?? '-'}` : '請確認有獎項且有參與者' }}
+          {{ canDraw ? `使用手機遙控或後台觸發抽獎 · 當前獎項：${currentPrize?.name ?? '-'}` : '請確認有獎項且有參與者' }}
         </div>
       </div>
 
       <!-- RIGHT: Winners -->
       <div style="display:flex;flex-direction:column;gap:16px;" class="panel-right">
-        <WinnersPanel :winners="allWinners" @clear="clearWinners" />
+        <WinnersPanel :winners="allWinners" />
       </div>
     </div>
 
@@ -100,8 +74,13 @@
       :show="showResult"
       :prize="resultPrize"
       :winners="resultWinners"
-      @close="showResult = false"
+      @close="closeResult"
     />
+
+    <!-- Toast notification #1 -->
+    <Transition name="toast">
+      <div v-if="toastVisible" class="toast-msg">{{ toastMsg }}</div>
+    </Transition>
 
     <PrizeModal
       :show="showPrizeModal"
@@ -141,7 +120,7 @@ const remoteTargetId = urlParams.get('remote') || ''
 
 // ── Shared persistent state ──
 const sharedState = useSharedState()
-const { participantsRaw, prizes, allWinners, vipGuarantee, vipExclude, eventTitle } = sharedState
+const { participantsRaw, prizes, allWinners, vipGuarantee, vipExclude, registrationDeadline, eventTitle } = sharedState
 
 // GAS sync (only on main display)
 if (!isRemotePage && !isAdminPage && !isVIPPage && !isCheckPage) useGASSync(sharedState)
@@ -149,6 +128,11 @@ if (!isRemotePage && !isAdminPage && !isVIPPage && !isCheckPage) useGASSync(shar
 const participantList = computed(() =>
   participantsRaw.value.split('\n').map(s => s.trim()).filter(Boolean)
 )
+
+const availableParticipants = computed(() => {
+  const wonNames = new Set(allWinners.value.map(w => w.name))
+  return participantList.value.filter(n => !wonNames.has(n))
+})
 
 // ── Prize selection ──
 const selectedPrizeIdx = ref(0)
@@ -168,6 +152,17 @@ watch([selectedPrizeIdx, prizes], () => {
   }
 }, { deep: true })
 
+// ── Toast (#1) ──
+const toastMsg     = ref('')
+const toastVisible = ref(false)
+let toastTimer = null
+function showToast(msg) {
+  toastMsg.value = msg
+  toastVisible.value = true
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => { toastVisible.value = false }, 3000)
+}
+
 // ── Draw state ──
 const isSpinning   = ref(false)
 const countdown    = ref(0)
@@ -180,12 +175,68 @@ const remainingSlots = computed(() => {
   if (!currentPrize.value) return 0
   return currentPrize.value.total - currentPrize.value.winners.length
 })
+
+// 計算指定獎項的實際可抽人數（可傳入任意 prize 物件）
+function calcEffectiveMax(prize) {
+  if (!prize) return 0
+  const slotLeft = prize.total - prize.winners.length
+  if (slotLeft <= 0) return 0
+
+  const alreadyWon = new Set(allWinners.value.map(w => w.name))
+
+  const guaranteeList = vipGuarantee.value
+    .split('\n')
+    .map(s => {
+      const [name, prizeName = ''] = s.split(',').map(p => p.trim())
+      return { name, prizeName }
+    })
+    .filter(g => g.name)
+
+  const excludeList = vipExclude.value.split('\n').map(s => s.trim()).filter(Boolean)
+
+  const reservedForOtherPrize = new Set(
+    guaranteeList
+      .filter(g => {
+        if (!g.prizeName || alreadyWon.has(g.name)) return false
+        const isForThisPrize = prize.name.includes(g.prizeName) || g.prizeName.includes(prize.name)
+        return !isForThisPrize
+      })
+      .map(g => g.name)
+  )
+
+  let available = participantList.value.filter(n =>
+    !alreadyWon.has(n) && !excludeList.includes(n) && !reservedForOtherPrize.has(n)
+  ).length
+
+  // 正常 pool 為空時（剩餘者全是被排除者），退回到所有未中獎者
+  if (available === 0) {
+    available = participantList.value.filter(n => !alreadyWon.has(n)).length
+  }
+
+  return Math.min(slotLeft, available)
+}
+
+// 實際可抽人數：排除已中獎、排除名單、保留給其他獎項的 VIP
+const effectiveDrawMax = computed(() => calcEffectiveMax(currentPrize.value))
+
 const drawCount = ref(1)
 
 const canDraw = computed(() => {
   if (!currentPrize.value) return false
   if (currentPrize.value.winners.length >= currentPrize.value.total) return false
-  return participantList.value.length > 0
+  return effectiveDrawMax.value > 0
+})
+
+// drawCount hint：說明為什麼上限比名額少 (#2)
+const drawCountHint = computed(() => {
+  if (!currentPrize.value) return ''
+  if (effectiveDrawMax.value >= remainingSlots.value) return ''
+  return `最多可抽 ${effectiveDrawMax.value} 位（已扣除保留及後順位名單）`
+})
+
+// 切換獎項或可用人數變動時，自動將 drawCount 夾在合法範圍內
+watch(effectiveDrawMax, max => {
+  if (drawCount.value > max) drawCount.value = Math.max(1, max)
 })
 
 // ── Prize Modal (main screen quick-add, still available) ──
@@ -252,7 +303,17 @@ function pickWinner() {
       return { name: g.name, isVip: true }
   }
 
-  let pool = participantList.value.filter(n => !alreadyWon.has(n) && !excludeList.includes(n))
+  // 有指定獎項的保底名單：這些人要留給指定獎項，不能被其他獎項隨機抽走
+  const reservedForOtherPrize = new Set(
+    guaranteeList
+      .filter(g => g.prizeName && !alreadyWon.has(g.name))
+      .map(g => g.name)
+  )
+
+  let pool = participantList.value.filter(n =>
+    !alreadyWon.has(n) && !excludeList.includes(n) && !reservedForOtherPrize.has(n)
+  )
+  // 正常 pool 為空（剩餘者全是被排除者）→ 退回所有未中獎者，排除規則此時失效
   if (pool.length === 0) pool = participantList.value.filter(n => !alreadyWon.has(n))
   if (pool.length === 0) return null
 
@@ -264,8 +325,9 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 async function startDraw() {
   if (isSpinning.value || !canDraw.value) return
   isSpinning.value = true
+  pushState({ prize: currentPrize.value?.name, remaining: remainingSlots.value, spinning: true })
 
-  const count = Math.min(drawCount.value, remainingSlots.value)
+  const count = Math.min(drawCount.value, effectiveDrawMax.value)
 
   // ── 倒數 ──
   physicsCanvasRef.value?.setSwirl(1)
@@ -318,13 +380,20 @@ async function startDraw() {
     if (next !== -1) {
       selectedPrizeIdx.value = next
       drawCount.value = 1
+      showToast(`已自動切換至「${prizes.value[next].name}」`)
     }
   }
 
-  // 推送最新狀態到遙控器
-  pushState({ prize: currentPrize.value?.name, remaining: remainingSlots.value })
+  // 推送最新狀態到遙控器（含 spinning: false）
+  pushState({ prize: currentPrize.value?.name, remaining: remainingSlots.value, spinning: false })
 
   isSpinning.value = false
+}
+
+// Modal 關閉後才重建球池，避免與結果動畫同時發生 (#3)
+function closeResult() {
+  showResult.value = false
+  physicsCanvasRef.value?.rebuild()
 }
 
 function launchConfetti() {
@@ -350,6 +419,8 @@ watch(myPeerId, id => {
 })
 watch(peerConnected, v => {
   localStorage.setItem('lottery_peer_connected', String(v))
+  // 遙控器剛連線時立刻推送當前狀態，讓「等待主畫面同步」立即消失
+  if (v) pushState({ prize: currentPrize.value?.name, remaining: remainingSlots.value, spinning: isSpinning.value })
 })
 
 // ── Admin QR Code ──
@@ -358,6 +429,9 @@ const adminPageUrl = computed(() => `${window.location.href.split('?')[0]}?admin
 const adminQrUrl = computed(() =>
   `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(adminPageUrl.value)}`
 )
+
+// ── 報名表單 URL ──
+const gasUrl = import.meta.env.VITE_GAS_URL || ''
 
 onMounted(() => {
   if (!isRemotePage && !isAdminPage && !isVIPPage && !isCheckPage) initPeer()
@@ -368,6 +442,75 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+/* ── 空狀態（無參與者）── */
+.empty-state-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: rgba(255,215,0,0.04);
+  border: 1px solid rgba(255,215,0,0.15);
+  border-radius: 20px;
+  padding: 36px 28px;
+  min-height: 460px;
+  text-align: center;
+}
+.empty-state-title {
+  font-size: 1.6rem;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.empty-state-sub {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+}
+.empty-state-qr {
+  width: 220px;
+  height: 220px;
+  border-radius: 12px;
+  border: 2px solid rgba(255,215,0,0.25);
+  padding: 8px;
+  background: #fff;
+}
+.empty-state-no-qr {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.empty-state-countdown {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,215,0,0.3);
+  border-radius: 14px;
+  padding: 14px 28px;
+}
+.countdown-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  margin-bottom: 6px;
+}
+.countdown-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+}
+.empty-state-closed {
+  font-size: 1rem;
+  color: #ff6666;
+  font-weight: 700;
+}
+.empty-state-hint {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 0.08em;
+}
+
 /* ── Draw count control ── */
 .draw-btn-wrap {
   display: flex;
@@ -510,4 +653,27 @@ onUnmounted(() => {
 }
 .admin-qr-link:hover { color: var(--gold); text-decoration: underline; }
 .admin-qr-close:hover { background: rgba(255,255,255,0.12); color: var(--text-light); }
+
+/* ── Toast (#1) ── */
+.toast-msg {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(20, 20, 30, 0.92);
+  border: 1px solid rgba(255,215,0,0.3);
+  border-radius: 24px;
+  color: var(--gold);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 0.88rem;
+  padding: 10px 24px;
+  z-index: 999;
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.toast-enter-active { transition: opacity 0.25s, transform 0.25s; }
+.toast-leave-active { transition: opacity 0.4s, transform 0.4s; }
+.toast-enter-from  { opacity: 0; transform: translateX(-50%) translateY(12px); }
+.toast-leave-to    { opacity: 0; transform: translateX(-50%) translateY(8px); }
 </style>

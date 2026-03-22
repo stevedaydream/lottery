@@ -36,21 +36,25 @@
     <!-- Results -->
     <template v-else>
 
-      <!-- Loading -->
+      <!-- 首次載入 Loading（尚無舊資料時才全屏顯示） -->
       <div v-if="loading && !lastFetched" class="status-card status-loading">
         <div class="spinner"></div>
         <span>查詢中...</span>
       </div>
 
       <!-- Error -->
-      <div v-else-if="fetchError" class="status-card status-error">
+      <div v-else-if="fetchError && !lastFetched" class="status-card status-error">
         <div class="status-icon">⚠️</div>
         <div>{{ fetchError }}</div>
         <button class="retry-btn" @click="fetchResults">重試</button>
       </div>
 
-      <!-- Results loaded -->
+      <!-- Results loaded（含刷新中 overlay） -->
       <template v-else-if="lastFetched">
+        <!-- 刷新中輕量 overlay，不蓋掉舊資料 #15 -->
+        <div v-if="loading" class="refresh-overlay">
+          <div class="spinner-sm"></div> 更新中...
+        </div>
 
         <!-- ── Identity Card (for showing to staff) ── -->
         <div class="identity-card">
@@ -462,7 +466,8 @@ function formatTime(iso) {
   flex-direction: column;
   align-items: flex-end;
   gap: 2px;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
+  font-weight: 700;
   color: #4caf50;
 }
 .claimed-time {
@@ -470,11 +475,13 @@ function formatTime(iso) {
   color: rgba(255,255,255,0.25);
 }
 .unclaimed-tag {
-  font-size: 0.75rem;
-  color: rgba(255,215,0,0.5);
-  border: 1px solid rgba(255,215,0,0.2);
-  border-radius: 6px;
-  padding: 3px 8px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #ff9800;
+  border: 1px solid rgba(255,152,0,0.4);
+  border-radius: 8px;
+  padding: 5px 12px;
+  background: rgba(255,152,0,0.08);
 }
 
 /* ── Status cards ── */
@@ -584,6 +591,27 @@ function formatTime(iso) {
   transition: all 0.2s;
 }
 .search-again-btn:hover { border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.4); }
+
+/* ── Refresh overlay (non-blocking) ── */
+.refresh-overlay {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+  color: rgba(255,215,0,0.5);
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,215,0,0.12);
+  border-radius: 20px;
+  padding: 6px 16px;
+}
+.spinner-sm {
+  width: 12px; height: 12px;
+  border: 2px solid rgba(255,215,0,0.2);
+  border-top-color: rgba(255,215,0,0.6);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
 
 /* ── Spinner ── */
 .spinner {

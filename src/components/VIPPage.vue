@@ -35,7 +35,9 @@
         <!-- ── 保送名單 ── -->
         <div class="vip-col">
           <div class="col-title gold">✦ 保送名單（必中）</div>
-          <div class="col-hint">指定人員配對獎項，抽到該獎時必定出線；不指定獎項則任何獎皆優先</div>
+          <div class="col-hint">指定人員配對獎項，抽到該獎時必定出線；不指定獎項則任何獎皆優先<br>
+            <span class="col-hint-format">格式：姓名 → 選擇獎項（或留空代表任意獎）</span>
+          </div>
 
           <!-- 現有條目 -->
           <div class="entry-list">
@@ -72,10 +74,10 @@
           </div>
         </div>
 
-        <!-- ── 排除名單 ── -->
+        <!-- ── 後順位名單 ── -->
         <div class="vip-col">
-          <div class="col-title muted">✕ 排除名單（不抽）</div>
-          <div class="col-hint">選定人員不參與抽獎</div>
+          <div class="col-title muted">↓ 後順位名單（壓後）</div>
+          <div class="col-hint">有其他人可抽時不會被選到，其他人全部中獎後才會被抽入剩餘獎項</div>
 
           <!-- 現有條目 -->
           <div class="entry-list">
@@ -88,7 +90,7 @@
 
           <!-- 新增表單 -->
           <div v-if="!showAddExclude" class="add-row">
-            <button class="add-btn" @click="showAddExclude = true">＋ 新增排除</button>
+            <button class="add-btn" @click="showAddExclude = true">＋ 新增後順位</button>
           </div>
           <div v-else class="add-form">
             <select class="form-select" v-model="newExcludeName">
@@ -266,6 +268,7 @@ onMounted(() => {
 .col-title.gold { color:var(--gold); }
 .col-title.muted { color:var(--text-muted); }
 .col-hint { font-size:.75rem; color:var(--text-muted); margin-bottom:14px; line-height:1.7; }
+.col-hint-format { display:inline-block; margin-top:4px; color:rgba(255,215,0,0.4); font-size:.72rem; font-style:italic; }
 
 /* Entry list */
 .entry-list { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; min-height:40px; }
