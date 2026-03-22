@@ -1,0 +1,3 @@
+GAS:
+clasp push
+clasp deploy --deploymentId AKfycbweS0TL2t6zkaVYagUB3KXeU8QbNx5nisg62fqXbJUgiHkWeOfqDKP2FCeM2DTkH-8a -d v3

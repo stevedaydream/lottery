@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>尾牙抽獎報名</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700;900&display=swap');
+
+    :root {
+      --gold: #FFD700;
+      --gold-dark: #B8860B;
+      --red: #CC0000;
+      --bg: #0A0A0A;
+      --card: #111;
+      --card2: #1A1A1A;
+      --text: #F5F0E8;
+      --muted: #888;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Noto Serif TC', serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .header-title {
+      font-size: 1.8rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 0.05em;
+    }
+    .header-sub {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 6px;
+      letter-spacing: 0.15em;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(255,215,0,0.15);
+      border-radius: 20px;
+      padding: 28px 24px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold-dark), var(--gold), var(--gold-dark), transparent);
+    }
+
+    .field { margin-bottom: 20px; }
+
+    label {
+      display: block;
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+      letter-spacing: 0.05em;
+    }
+    .required { color: var(--red); margin-left: 2px; }
+    .optional { color: #555; font-size: 0.75rem; }
+
+    input[type="text"],
+    select {
+      width: 100%;
+      background: var(--card2);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 10px;
+      color: var(--text);
+      font-family: 'Noto Serif TC', serif;
+      font-size: 1rem;
+      padding: 13px 16px;
+      outline: none;
+      transition: border-color 0.2s;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input[type="text"]:focus,
+    select:focus { border-color: rgba(255,215,0,0.4); }
+    input[type="text"]::placeholder { color: #444; }
+
+    select {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23888' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+      padding-right: 36px;
+      cursor: pointer;
+    }
+    select option { background: #1a1a1a; }
+
+    .hint {
+      font-size: 0.75rem;
+      color: #555;
+      margin-top: 6px;
+      line-height: 1.6;
+    }
+    .hint-block {
+      background: rgba(255,215,0,0.05);
+      border: 1px solid rgba(255,215,0,0.1);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      color: var(--gold-dark);
+      margin-bottom: 20px;
+      line-height: 1.7;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+      border: none;
+      border-radius: 12px;
+      color: #000;
+      font-family: 'Noto Serif TC', serif;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      margin-top: 8px;
+    }
+    .submit-btn:hover:not(:disabled) { opacity: 0.88; }
+    .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .result {
+      margin-top: 20px;
+      padding: 18px 20px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      text-align: center;
+    }
+    .result.success {
+      background: rgba(76,175,80,0.12);
+      border: 1px solid rgba(76,175,80,0.3);
+      color: #81c784;
+    }
+    .result.error {
+      background: rgba(200,0,0,0.1);
+      border: 1px solid rgba(200,0,0,0.25);
+      color: #ff6b6b;
+    }
+    .result.hidden { display: none; }
+
+    .success-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; }
+
+    .check-block {
+      margin-top: 24px;
+      background: rgba(255,215,0,0.05);
+      border: 1px solid rgba(255,215,0,0.2);
+      border-radius: 14px;
+      padding: 20px;
+      text-align: center;
+    }
+    .check-block-title {
+      font-size: 0.78rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      margin-bottom: 14px;
+    }
+    .claim-code-display {
+      font-family: 'Courier New', monospace;
+      font-size: 2.2rem;
+      font-weight: 700;
+      letter-spacing: 0.35em;
+      color: var(--gold);
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,215,0,0.25);
+      border-radius: 10px;
+      padding: 14px 20px;
+      margin-bottom: 6px;
+      word-break: break-all;
+    }
+    .claim-code-hint {
+      font-size: 0.72rem;
+      color: #555;
+      margin-bottom: 16px;
+    }
+    .check-link-btn {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+      border: none;
+      border-radius: 10px;
+      color: #000;
+      font-family: 'Noto Serif TC', serif;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.05em;
+      text-decoration: none;
+      cursor: pointer;
+      transition: opacity 0.2s;
+      margin-bottom: 8px;
+    }
+    .check-link-btn:hover { opacity: 0.88; }
+    .check-save-hint {
+      font-size: 0.72rem;
+      color: #555;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="header-title">🎊 尾牙抽獎報名</div>
+      <div class="header-sub">ANNUAL LUCKY DRAW REGISTRATION</div>
+    </div>
+
+    <div class="card">
+      <div id="form-area">
+        <div class="hint-block">
+          ※ 請使用中文姓名填寫，以利比對員工名單<br>
+          ※ 每人限報名一次，重複送出不計入
+        </div>
+
+        <div class="field">
+          <label>姓名 <span class="required">*</span></label>
+          <input type="text" id="name" placeholder="請輸入中文姓名" autocomplete="name">
+        </div>
+
+        <div class="field">
+          <label>單位 <span class="required">*</span></label>
+          <select id="unit">
+            <option value="9A">9A</option>
+            <option value="8A">8A</option>
+            <option value="9B">9B</option>
+            <option value="門診">門診</option>
+            <option value="VS">VS</option>
+            <option value="NP">NP</option>
+            <option value="OR">OR</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>桌號 <span class="optional">（非必填）</span></label>
+          <input type="text" id="table" placeholder="例：A1、第三桌">
+        </div>
+
+        <button class="submit-btn" id="submit-btn" onclick="handleSubmit()">
+          送出報名
+        </button>
+      </div>
+
+      <div id="result" class="result hidden"></div>
+    </div>
+  </div>
+
+  <script>
+    function handleSubmit() {
+      const name  = document.getElementById('name').value.trim()
+      const unit  = document.getElementById('unit').value
+      const table = document.getElementById('table').value.trim()
+
+      if (!name) {
+        showResult({ ok: false, message: '請填寫姓名' })
+        return
+      }
+
+      const btn = document.getElementById('submit-btn')
+      btn.disabled = true
+      btn.textContent = '送出中...'
+
+      google.script.run
+        .withSuccessHandler(showResult)
+        .withFailureHandler(() => showResult({ ok: false, message: '系統錯誤，請稍後再試' }))
+        .registerParticipant({ name, unit, table })
+    }
+
+    // 中獎查詢頁面的基礎 URL（Netlify 部署位置）
+    const CHECK_BASE_URL = 'https://fancy-bombolone-80bcd2.netlify.app/'
+
+    function showResult(result) {
+      const btn       = document.getElementById('submit-btn')
+      const resultDiv = document.getElementById('result')
+
+      if (result.ok || result.code) {
+        // 成功（或已報名）：顯示兌獎碼
+        resultDiv.className = 'result success'
+        document.getElementById('form-area').style.display = 'none'
+
+        const code     = result.code || ''
+        const checkUrl = CHECK_BASE_URL + '?check=' + encodeURIComponent(code)
+        const codeHtml = code
+          ? '<div class="check-block">' +
+              '<div class="check-block-title">📋 您的專屬兌獎碼（請截圖或記下）</div>' +
+              '<div class="claim-code-display">' + code + '</div>' +
+              '<div class="claim-code-hint">現場出示此畫面給工作人員掃描核對</div>' +
+              '<a class="check-link-btn" href="' + checkUrl + '" target="_blank">🔍 查詢我的中獎狀態 →</a>' +
+              '<div class="check-save-hint">⚠ 請將此頁面截圖存檔<br>連結僅限本人查詢，請勿分享</div>' +
+            '</div>'
+          : ''
+
+        resultDiv.innerHTML = '<span class="success-icon">🎉</span>' + result.message + codeHtml
+      } else {
+        resultDiv.className = 'result error'
+        resultDiv.textContent = result.message
+        btn.disabled = false
+        btn.textContent = '送出報名'
+      }
+    }
+  </script>
+</body>
+</html>
