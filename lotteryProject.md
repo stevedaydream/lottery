@@ -2,7 +2,7 @@
 
 ## 專案概述
 
-企業年度活動抽獎系統，以 Vue 3 + Vite 建構，部署於 Netlify。支援物理球池動畫、手機遙控、後台管理、VIP 保送/後順位、GAS 雲端同步、兌獎管理與中獎查詢。
+企業年度活動抽獎系統，以 Vue 3 + Vite 建構，部署於 Vercel。支援物理球池動畫、手機遙控、後台管理、VIP 保送/後順位、GAS 雲端同步、兌獎管理與中獎查詢。
 
 ---
 
@@ -16,7 +16,7 @@
 | P2P 通訊 | PeerJS (0.peerjs.com) |
 | 雲端同步 | Google Apps Script (GAS) |
 | 認證 | Google OAuth (GSI) |
-| 部署 | Netlify |
+| 部署 | Vercel（GitHub 自動部署） |
 | Excel 匯入 | xlsx |
 | 禮花動畫 | canvas-confetti |
 
@@ -35,8 +35,8 @@ VITE_ADMIN_EMAIL=     # 管理員 Google 帳號（留空則不限制）
 ## 部署指令
 
 ```bash
-# 前端 (Netlify 自動 CI/CD，或手動)
-npm run build
+# 前端 (Vercel：push main 自動部署；環境變數於 Vercel 專案設定)
+git push origin main
 
 # GAS 後端
 clasp push
