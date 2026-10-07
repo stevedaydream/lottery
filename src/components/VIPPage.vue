@@ -48,7 +48,7 @@
               <span class="entry-prize" :class="{ any: !g.prizeName }">
                 {{ g.prizeName || '任意獎項' }}
               </span>
-              <button class="del-btn" @click="removeGuarantee(i)">✕</button>
+              <button class="del-btn" @click="removeGuarantee(i)" :aria-label="`移除 ${g.name}`">✕</button>
             </div>
           </div>
 
@@ -84,7 +84,7 @@
             <div v-if="!excludeEntries.length" class="empty-hint">尚無排除設定</div>
             <div v-for="(name, i) in excludeEntries" :key="i" class="entry-row">
               <span class="entry-name">{{ name }}</span>
-              <button class="del-btn" @click="removeExclude(i)">✕</button>
+              <button class="del-btn" @click="removeExclude(i)" :aria-label="`移除 ${name}`">✕</button>
             </div>
           </div>
 
@@ -240,7 +240,7 @@ onMounted(() => {
 .login-wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; background:radial-gradient(ellipse 60% 50% at 50% 0%,rgba(200,160,0,.07) 0%,transparent 60%); }
 .login-card { background:var(--bg-card); border:1px solid rgba(255,215,0,.15); border-radius:20px; padding:48px 40px; text-align:center; width:340px; max-width:90vw; }
 .login-logo { font-size:2.5rem; color:var(--gold); margin-bottom:12px; }
-.login-title { font-family:'Bebas Neue',sans-serif; font-size:1.8rem; letter-spacing:.2em; color:var(--gold); margin-bottom:6px; }
+.login-title { font-family:var(--font-display); font-weight:900; font-size:1.8rem; letter-spacing:.2em; color:var(--gold); margin-bottom:6px; }
 .login-sub { font-size:.8rem; color:var(--text-muted); letter-spacing:.1em; margin-bottom:28px; }
 .signin-btn-wrap { display:flex; justify-content:center; min-height:44px; }
 .config-warn { font-size:.8rem; color:#f0a040; background:rgba(240,160,64,.08); border:1px solid rgba(240,160,64,.2); border-radius:8px; padding:12px; font-family:monospace; }
@@ -249,7 +249,7 @@ onMounted(() => {
 /* Panel */
 .vip-panel { max-width:860px; margin:0 auto; padding:32px 20px 48px; }
 .vip-header { display:flex; align-items:center; gap:12px; margin-bottom:28px; padding-bottom:16px; border-bottom:1px solid rgba(255,215,0,.1); }
-.vip-title { font-family:'Bebas Neue',sans-serif; font-size:1.5rem; letter-spacing:.15em; color:var(--gold); flex:1; }
+.vip-title { font-family:var(--font-display); font-weight:900; font-size:1.5rem; letter-spacing:.15em; color:var(--gold); flex:1; }
 .vip-user { font-size:.78rem; color:var(--text-muted); }
 .logout-btn { background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.1); border-radius:8px; color:var(--text-muted); font-family:'Noto Serif TC',serif; font-size:.8rem; padding:6px 14px; cursor:pointer; transition:all .2s; }
 .logout-btn:hover { background:rgba(255,255,255,.1); color:var(--text-light); }
@@ -288,11 +288,37 @@ onMounted(() => {
 .add-form { display:flex; flex-direction:column; gap:8px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.07); border-radius:10px; padding:12px; }
 .form-select { width:100%; background:var(--bg-card2); border:1px solid rgba(255,255,255,.1); border-radius:8px; color:var(--text-light); font-family:'Noto Serif TC',serif; font-size:.88rem; padding:8px 10px; outline:none; cursor:pointer; -webkit-appearance:none; appearance:none; transition:border-color .2s; }
 .form-select:focus { border-color:rgba(255,215,0,.35); }
-.form-select option { background:#1a1a1a; }
+.form-select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23B9A58A' d='M6 8L0 0h12z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 12px center; padding-right:34px; }
+.form-select option { background:var(--surface); }
 .form-btns { display:flex; gap:8px; }
 .confirm-btn { flex:1; padding:8px; background:linear-gradient(135deg,var(--gold-dark),var(--gold)); border:none; border-radius:8px; color:#000; font-family:'Noto Serif TC',serif; font-weight:700; font-size:.85rem; cursor:pointer; transition:opacity .2s; }
 .confirm-btn:hover:not(:disabled) { opacity:.85; }
 .confirm-btn:disabled { opacity:.4; cursor:not-allowed; }
 .cancel-btn { padding:8px 16px; background:transparent; border:1px solid rgba(255,255,255,.1); border-radius:8px; color:var(--text-muted); font-family:'Noto Serif TC',serif; font-size:.85rem; cursor:pointer; transition:all .2s; }
 .cancel-btn:hover { background:rgba(255,255,255,.07); color:var(--text-light); }
+
+/* ── 手機版 ── */
+@media (max-width: 640px) {
+  .vip-panel { padding:16px 12px 40px; }
+
+  /* 標題獨占一行，同步狀態一行，帳號與登出一行 */
+  .vip-header { flex-wrap:wrap; gap:8px 10px; margin-bottom:16px; }
+  .vip-title { flex:1 0 100%; font-size:1.4rem; letter-spacing:.08em; }
+  .sync-status { flex:1 0 100%; }
+  .vip-user { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .logout-btn { min-height:40px; }
+
+  .vip-cols { flex-direction:column; align-items:stretch; gap:14px; }
+  .vip-col { min-width:0; padding:16px 14px; border-radius:14px; }
+
+  /* 名稱過長時換行，刪除鈕加大到可點 */
+  .entry-row { flex-wrap:wrap; padding:6px 6px 6px 12px; }
+  .entry-name { flex-shrink:1; min-width:0; overflow-wrap:anywhere; }
+  .entry-prize { min-width:0; overflow-wrap:anywhere; }
+  .del-btn { width:40px; height:40px; margin-left:auto; font-size:.9rem; }
+
+  /* iOS 輸入框字級小於 16px 會自動放大畫面 */
+  .form-select { font-size:16px; min-height:46px; }
+  .add-btn, .confirm-btn, .cancel-btn { min-height:44px; }
+}
 </style>
