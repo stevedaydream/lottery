@@ -37,7 +37,7 @@
       <div class="tab-bar">
         <button v-for="t in tabs" :key="t.key"
           :class="['tab-btn', { active: activeTab === t.key }]"
-          @click="activeTab = t.key">
+          @click="activeTab = t.key; $event.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' })">
           {{ t.label }}
         </button>
       </div>
@@ -915,7 +915,7 @@ onMounted(() => {
   margin-bottom: 16px;
 }
 .login-title {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 1.8rem;
   letter-spacing: 0.2em;
   color: var(--gold);
@@ -970,7 +970,7 @@ onMounted(() => {
   border-bottom: 1px solid rgba(255,215,0,0.12);
 }
 .admin-title {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 1.6rem;
   letter-spacing: 0.15em;
   color: var(--gold);
@@ -1070,7 +1070,7 @@ onMounted(() => {
   padding: 28px 24px;
 }
 .section-title {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 1.3rem;
   letter-spacing: 0.15em;
   color: var(--gold);
@@ -1203,7 +1203,7 @@ onMounted(() => {
 .admin-count-btn:hover:not(:disabled) { background: rgba(255,215,0,0.15); }
 .admin-count-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 .admin-count-display {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-num);
   font-size: 1.6rem;
   color: var(--gold);
   min-width: 30px;
@@ -1215,7 +1215,7 @@ onMounted(() => {
   border: 2px solid rgba(255,215,0,0.3);
   background: linear-gradient(135deg, rgba(184,134,11,0.2), rgba(255,215,0,0.12));
   color: var(--gold);
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-display);
   font-size: 1.3rem;
   letter-spacing: 0.15em;
   cursor: pointer;
@@ -1377,7 +1377,7 @@ onMounted(() => {
 }
 .cash-btn:hover { background: rgba(255,215,0,0.1); border-color: var(--gold); color: var(--gold); }
 .cash-amount {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--font-num);
   font-size: 1.1rem;
   color: var(--gold);
   letter-spacing: 0.1em;
@@ -1787,4 +1787,86 @@ onMounted(() => {
   transition: color 0.15s;
 }
 .unclaim-btn:hover { color: #ff6b6b; }
+
+/* ── 手機版 ── */
+@media (max-width: 640px) {
+  .admin-panel { padding: 16px 12px 40px; }
+
+  /* 標題獨占一行，其餘資訊換到下一行 */
+  .admin-header { flex-wrap: wrap; gap: 8px 10px; margin-bottom: 16px; }
+  .admin-title { flex: 1 0 100%; font-size: 1.4rem; letter-spacing: 0.08em; }
+  .sync-status { flex: 1 0 100%; margin-right: 0; }
+  .admin-user { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .logout-btn, .vip-entry-link { min-height: 40px; display: inline-flex; align-items: center; }
+
+  /* 分頁列改為橫向捲動 */
+  .tab-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-bottom: 16px;
+  }
+  .tab-bar::-webkit-scrollbar { display: none; }
+  .tab-btn { flex: 0 0 auto; min-width: 0; min-height: 44px; padding: 8px 14px; }
+
+  .title-setting-bar { padding: 8px 12px; }
+  .tab-content { padding: 20px 14px; border-radius: 14px; }
+
+  .section-header { flex-wrap: wrap; align-items: flex-start; gap: 12px; }
+  .section-header > div:last-child { flex-wrap: wrap; }
+  .action-btn { min-height: 40px; }
+
+  /* iOS 輸入框字級小於 16px 會自動放大畫面 */
+  .admin-textarea, .title-setting-input, .name-input, .total-input,
+  .rank-input, .deadline-input, .claim-search, .claim-filter-select { font-size: 16px; }
+  .admin-textarea.large { height: 260px; }
+
+  /* 遙控器 */
+  .remote-area { flex-direction: column; align-items: stretch; gap: 24px; }
+  .qr-block { align-self: center; }
+  .qr-img, .qr-placeholder { width: 180px; height: 180px; }
+  .admin-remote-ctrl { min-width: 0; }
+  .admin-count-btn { width: 40px; height: 40px; }
+  .preset-btn { min-height: 36px; padding: 4px 12px; }
+  .admin-draw-btn { min-height: 52px; }
+
+  /* 獎項：名稱一行、名額與刪除換到第二行 */
+  .prize-row { flex-wrap: wrap; }
+  .name-input { flex: 1 1 calc(100% - 56px); min-width: 0; }
+  .won-label { min-width: 0; }
+  .icon-btn { width: 40px; height: 40px; margin-left: auto; }
+  .tag-btn { padding: 6px 12px; }
+  .cash-row { justify-content: space-between; }
+  .cash-btn { min-height: 36px; }
+
+  /* 兌獎：表頭隱藏，每筆改為兩行卡片 */
+  .claim-search { width: 100%; }
+  .claim-filter-select { flex: 1; }
+  .claim-head { display: none; }
+  .claim-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "name action" "unit action" "prize action";
+    row-gap: 2px;
+    padding: 12px;
+  }
+  .cl-name { grid-area: name; }
+  .cl-unit { grid-area: unit; }
+  .cl-prize { grid-area: prize; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cl-action { grid-area: action; }
+  .claim-btn { min-height: 40px; padding: 6px 12px; }
+  .claimed-badge { flex-wrap: wrap; justify-content: flex-end; }
+  .unclaim-btn { min-width: 32px; min-height: 32px; }
+
+  /* 中獎名單：去掉空的備註欄 */
+  .table-head, .table-row { grid-template-columns: 32px minmax(0, 1fr) minmax(0, 1.4fr); padding: 10px; }
+  .table-head span:last-child, .cell-vip { display: none; }
+
+  /* 值班 Modal */
+  .modal-overlay { padding: 12px; align-items: flex-end; }
+  .duty-modal { width: 100%; max-height: 88vh; padding: 18px 16px; }
+  .duty-member-item { padding: 8px 14px; }
+  .duty-modal-footer { flex-wrap: wrap; }
+  .duty-selected-count { flex: 1 0 100%; }
+  .duty-modal-footer .action-btn { flex: 1; }
+}
 </style>
