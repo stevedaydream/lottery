@@ -138,7 +138,7 @@ function registerParticipant(data) {
     const existing = registrations.find(r => r.name === name)
     return {
       ok:      false,
-      message: '您已在抽獎名單中，無需重複報名 🎉',
+      message: '您已在抽獎名單中，無需重複報名',
       code:    existing ? existing.code : null,
     }
   }
@@ -158,7 +158,7 @@ function registerParticipant(data) {
   writeKey('participants', newParticipants)
 
   const tableMsg = table ? `（桌號：${table}）` : ''
-  return { ok: true, message: `✓ ${name} 報名成功！${unit}${tableMsg} 已加入抽獎名單`, code }
+  return { ok: true, message: `${name} 報名成功！${unit}${tableMsg} 已加入抽獎名單`, code }
 }
 
 // ── 產生唯一 6 碼兌獎碼（排除易混淆字元）──

@@ -5,263 +5,228 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>尾牙抽獎報名</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700;900&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@900&display=swap');
 
+    /* 與前端中獎查詢頁一致的淺色「紅幕舞台」配色 */
     :root {
-      --gold: #FFD700;
-      --gold-dark: #B8860B;
-      --red: #CC0000;
-      --bg: #0A0A0A;
-      --card: #111;
-      --card2: #1A1A1A;
-      --text: #F5F0E8;
-      --muted: #888;
+      --ink: #170B0C;
+      --cream: #F3E3C3;
+      --paper: #F6EEDF;
+      --muted: #6B5A4C;
+      --line: #CDBDA6;
+      --accent: #9E2A18;
+      --font-display: 'Noto Serif TC', serif;
+      --font-body: 'Noto Sans TC', sans-serif;
+      --font-num: 'Big Shoulders Display', sans-serif;
     }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'Noto Serif TC', serif;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--font-body);
       min-height: 100vh;
       display: flex;
-      align-items: center;
       justify-content: center;
-      padding: 24px 16px;
+      padding: 28px 20px 48px;
     }
 
     .wrap {
       width: 100%;
-      max-width: 420px;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
 
-    .header {
-      text-align: center;
-      margin-bottom: 28px;
+    .header { display: flex; flex-direction: column; gap: 4px; }
+    .header-sub {
+      font-family: var(--font-num);
+      font-weight: 800;
+      font-size: 0.95rem;
+      letter-spacing: 0.32em;
+      color: var(--muted);
     }
     .header-title {
-      font-size: 1.8rem;
+      font-family: var(--font-display);
       font-weight: 900;
-      background: linear-gradient(135deg, var(--gold-dark), var(--gold));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      letter-spacing: 0.05em;
-    }
-    .header-sub {
-      font-size: 0.8rem;
-      color: var(--muted);
-      margin-top: 6px;
-      letter-spacing: 0.15em;
+      font-size: 2rem;
+      letter-spacing: 0.06em;
     }
 
     .card {
-      background: var(--card);
-      border: 1px solid rgba(255,215,0,0.15);
+      background: #FFFFFF;
       border-radius: 20px;
-      padding: 28px 24px;
-      position: relative;
-      overflow: hidden;
-    }
-    .card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0; height: 2px;
-      background: linear-gradient(90deg, transparent, var(--gold-dark), var(--gold), var(--gold-dark), transparent);
+      padding: 24px 20px;
     }
 
-    .field { margin-bottom: 20px; }
+    .field { margin-bottom: 18px; }
 
     label {
       display: block;
-      font-size: 0.82rem;
+      font-size: 0.85rem;
       color: var(--muted);
       margin-bottom: 8px;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.12em;
     }
-    .required { color: var(--red); margin-left: 2px; }
-    .optional { color: #555; font-size: 0.75rem; }
+    .required { color: var(--accent); margin-left: 2px; }
+    .optional { font-size: 0.8rem; letter-spacing: 0; }
 
     input[type="text"],
     select {
       width: 100%;
-      background: var(--card2);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      color: var(--text);
-      font-family: 'Noto Serif TC', serif;
-      font-size: 1rem;
-      padding: 13px 16px;
+      height: 52px;
+      background: #FFFFFF;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      color: var(--ink);
+      font-family: var(--font-body);
+      font-size: 16px;
+      padding: 0 16px;
       outline: none;
-      transition: border-color 0.2s;
       -webkit-appearance: none;
       appearance: none;
     }
     input[type="text"]:focus,
-    select:focus { border-color: rgba(255,215,0,0.4); }
-    input[type="text"]::placeholder { color: #444; }
+    select:focus { border-color: var(--ink); }
+    input[type="text"]::placeholder { color: #A8977F; }
 
     select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23888' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236B5A4C' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
-      background-position: right 14px center;
-      padding-right: 36px;
+      background-position: right 16px center;
+      padding-right: 40px;
       cursor: pointer;
     }
-    select option { background: #1a1a1a; }
 
-    .hint {
-      font-size: 0.75rem;
-      color: #555;
-      margin-top: 6px;
-      line-height: 1.6;
-    }
     .hint-block {
-      background: rgba(255,215,0,0.05);
-      border: 1px solid rgba(255,215,0,0.1);
-      border-radius: 8px;
-      padding: 10px 14px;
-      font-size: 0.78rem;
-      color: var(--gold-dark);
+      background: #FBE7D3;
+      color: #7A3A0C;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 0.85rem;
       margin-bottom: 20px;
       line-height: 1.7;
     }
 
     .submit-btn {
       width: 100%;
-      padding: 15px;
-      background: linear-gradient(135deg, var(--gold-dark), var(--gold));
+      height: 56px;
+      background: var(--ink);
       border: none;
-      border-radius: 12px;
-      color: #000;
-      font-family: 'Noto Serif TC', serif;
+      border-radius: 14px;
+      color: var(--cream);
+      font-family: var(--font-body);
       font-weight: 700;
-      font-size: 1.1rem;
-      letter-spacing: 0.1em;
+      font-size: 1.05rem;
+      letter-spacing: 0.2em;
       cursor: pointer;
-      transition: opacity 0.2s;
-      margin-top: 8px;
+      margin-top: 4px;
     }
-    .submit-btn:hover:not(:disabled) { opacity: 0.88; }
-    .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
     .result {
-      margin-top: 20px;
-      padding: 18px 20px;
-      border-radius: 12px;
+      margin-top: 16px;
       font-size: 0.95rem;
       line-height: 1.6;
-      text-align: center;
     }
-    .result.success {
-      background: rgba(76,175,80,0.12);
-      border: 1px solid rgba(76,175,80,0.3);
-      color: #81c784;
-    }
+    .result.success { margin-top: 0; }
     .result.error {
-      background: rgba(200,0,0,0.1);
-      border: 1px solid rgba(200,0,0,0.25);
-      color: #ff6b6b;
+      padding: 12px 14px;
+      border-radius: 12px;
+      background: #F8DCD6;
+      color: var(--accent);
     }
     .result.hidden { display: none; }
 
-    .success-icon { font-size: 2.5rem; display: block; margin-bottom: 10px; }
+    .success-title {
+      font-family: var(--font-display);
+      font-weight: 900;
+      font-size: 1.6rem;
+      margin-bottom: 4px;
+    }
+    .success-msg { color: var(--muted); }
 
+    /* 兌獎碼卡片：與中獎查詢頁的身分核對卡同風格 */
     .check-block {
-      margin-top: 24px;
-      background: rgba(255,215,0,0.05);
-      border: 1px solid rgba(255,215,0,0.2);
-      border-radius: 14px;
-      padding: 20px;
-      text-align: center;
+      margin-top: 20px;
+      background: var(--ink);
+      color: var(--cream);
+      border-radius: 20px;
+      padding: 22px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
     }
     .check-block-title {
-      font-size: 0.78rem;
-      color: var(--muted);
-      letter-spacing: 0.08em;
-      margin-bottom: 14px;
+      font-size: 0.82rem;
+      color: #B9A58A;
+      letter-spacing: 0.24em;
     }
     .claim-code-display {
-      font-family: 'Courier New', monospace;
-      font-size: 2.2rem;
-      font-weight: 700;
-      letter-spacing: 0.35em;
-      color: var(--gold);
-      background: rgba(0,0,0,0.3);
-      border: 1px solid rgba(255,215,0,0.25);
-      border-radius: 10px;
-      padding: 14px 20px;
-      margin-bottom: 6px;
+      font-family: var(--font-num);
+      font-weight: 800;
+      font-size: 3rem;
+      letter-spacing: 0.16em;
+      line-height: 1;
       word-break: break-all;
     }
-    .claim-code-hint {
-      font-size: 0.72rem;
-      color: #555;
-      margin-bottom: 16px;
-    }
-    .check-link-btn {
-      display: block;
-      width: 100%;
-      padding: 13px;
-      background: linear-gradient(135deg, var(--gold-dark), var(--gold));
-      border: none;
-      border-radius: 10px;
-      color: #000;
-      font-family: 'Noto Serif TC', serif;
-      font-weight: 700;
-      font-size: 1rem;
-      letter-spacing: 0.05em;
-      text-decoration: none;
-      cursor: pointer;
-      transition: opacity 0.2s;
-      margin-bottom: 8px;
-    }
-    .check-link-btn:hover { opacity: 0.88; }
-    .check-save-hint {
-      font-size: 0.72rem;
-      color: #555;
-      line-height: 1.6;
-    }
+    .claim-code-hint { font-size: 0.85rem; color: #B9A58A; }
     .copy-btn {
       width: 100%;
-      padding: 11px;
-      background: rgba(255,215,0,0.1);
-      border: 1px solid rgba(255,215,0,0.35);
-      border-radius: 10px;
-      color: var(--gold);
-      font-family: 'Noto Serif TC', serif;
+      height: 48px;
+      background: transparent;
+      border: 1px solid rgba(243,227,195,0.35);
+      border-radius: 12px;
+      color: var(--cream);
+      font-family: var(--font-body);
       font-weight: 700;
       font-size: 0.95rem;
-      letter-spacing: 0.05em;
       cursor: pointer;
-      transition: background 0.2s, color 0.2s;
-      margin-bottom: 10px;
     }
-    .copy-btn:hover { background: rgba(255,215,0,0.2); }
+    .copy-btn.copied { background: var(--cream); color: var(--ink); }
+    .check-link-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 52px;
+      background: #E8452C;
+      border-radius: 12px;
+      color: #FFF6EA;
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.08em;
+      text-decoration: none;
+    }
+    .check-save-hint {
+      font-size: 0.8rem;
+      color: #B9A58A;
+      line-height: 1.7;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <div class="header">
-      <div class="header-title">🎊 尾牙抽獎報名</div>
-      <div class="header-sub">ANNUAL LUCKY DRAW REGISTRATION</div>
+      <div class="header-sub">LUCKY DRAW</div>
+      <div class="header-title">尾牙抽獎報名</div>
     </div>
 
     <div class="card">
       <div id="form-area">
         <div class="hint-block">
-          ※ 請使用中文姓名填寫，以利比對員工名單<br>
-          ※ 每人限報名一次，重複送出不計入
+          請使用中文姓名填寫，以利比對員工名單<br>
+          每人限報名一次，重複送出不計入
         </div>
 
         <div class="field">
-          <label>姓名 <span class="required">*</span></label>
+          <label for="name">姓名 <span class="required">*</span></label>
           <input type="text" id="name" placeholder="請輸入中文姓名" autocomplete="name">
         </div>
 
         <div class="field">
-          <label>單位 <span class="required">*</span></label>
+          <label for="unit">單位 <span class="required">*</span></label>
           <select id="unit">
             <option value="9A">9A</option>
             <option value="8A">8A</option>
@@ -274,7 +239,7 @@
         </div>
 
         <div class="field">
-          <label>桌號 <span class="optional">（非必填）</span></label>
+          <label for="table">桌號 <span class="optional">（非必填）</span></label>
           <input type="text" id="table" placeholder="例：A1、第三桌">
         </div>
 
@@ -324,16 +289,18 @@
         const checkUrl = CHECK_BASE_URL + '?check=' + encodeURIComponent(code)
         const codeHtml = code
           ? '<div class="check-block">' +
-              '<div class="check-block-title">📋 您的專屬兌獎碼</div>' +
+              '<div class="check-block-title">您的專屬兌獎碼</div>' +
               '<div class="claim-code-display" id="code-display">' + code + '</div>' +
+              '<div class="claim-code-hint">抽獎結束後憑此碼查詢及兌獎</div>' +
               '<button class="copy-btn" onclick="copyCode(\'' + code + '\')" id="copy-btn">複製兌獎碼</button>' +
-              '<div class="claim-code-hint" style="margin-top:6px">抽獎結束後憑此碼查詢及兌獎</div>' +
-              '<a class="check-link-btn" href="' + checkUrl + '" target="_blank">🔍 查詢我的中獎狀態 →</a>' +
-              '<div class="check-save-hint">⚠ 請將此頁面截圖存檔，或複製兌獎碼備用<br>關閉此頁後可重新送出報名表單取回兌獎碼</div>' +
+              '<a class="check-link-btn" href="' + checkUrl + '" target="_blank">查詢我的中獎狀態</a>' +
+              '<div class="check-save-hint">請將此頁面截圖存檔，或複製兌獎碼備用。<br>關閉此頁後可重新送出報名表單取回兌獎碼。</div>' +
             '</div>'
           : ''
 
-        resultDiv.innerHTML = '<span class="success-icon">🎉</span>' + result.message + codeHtml
+        resultDiv.innerHTML =
+          '<div class="success-title">' + (result.ok ? '報名完成' : '您已報名') + '</div>' +
+          '<div class="success-msg">' + result.message + '</div>' + codeHtml
 
         // 自動捲到兌獎碼區塊
         setTimeout(function() {
@@ -350,11 +317,11 @@
     function copyCode(code) {
       navigator.clipboard.writeText(code).then(function() {
         var btn = document.getElementById('copy-btn')
-        btn.textContent = '✓ 已複製'
-        btn.style.background = '#4caf50'
+        btn.textContent = '已複製'
+        btn.classList.add('copied')
         setTimeout(function() {
           btn.textContent = '複製兌獎碼'
-          btn.style.background = ''
+          btn.classList.remove('copied')
         }, 2000)
       }).catch(function() {
         // fallback for older browsers
