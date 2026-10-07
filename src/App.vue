@@ -174,17 +174,37 @@ const prizeTitle = computed(() => {
 })
 
 // Keep selectedPrizeIdx in bounds when prizes change from admin
+// 目前獎項已抽完時（例如主畫面重新整理後），自動選第一個還有名額的獎項；抽獎中不切換
 watch(prizes, () => {
   if (selectedPrizeIdx.value >= prizes.value.length) {
     selectedPrizeIdx.value = Math.max(0, prizes.value.length - 1)
   }
+  selectAvailablePrize()
 }, { deep: true })
+
+function selectAvailablePrize() {
+  const cur = prizes.value[selectedPrizeIdx.value]
+  if (isSpinning.value || !cur || cur.winners.length < cur.total) return
+  const next = prizes.value.findIndex(p => p.winners.length < p.total)
+  if (next !== -1) selectedPrizeIdx.value = next
+}
+onMounted(selectAvailablePrize)
+
+// 推送給遙控器的狀態：目前獎項、剩餘名額、抽獎中，以及可切換的獎項清單
+function remoteState(extra = {}) {
+  return {
+    prize:     currentPrize.value?.name,
+    remaining: remainingSlots.value,
+    spinning:  isSpinning.value,
+    prizeIdx:  selectedPrizeIdx.value,
+    prizes:    prizes.value.map(p => ({ name: p.name, remaining: p.total - p.winners.length })),
+    ...extra,
+  }
+}
 
 // Sync prize selection state to remote controller
 watch([selectedPrizeIdx, prizes], () => {
-  if (currentPrize.value) {
-    pushState({ prize: currentPrize.value.name, remaining: remainingSlots.value })
-  }
+  pushState(remoteState())
 }, { deep: true })
 
 // ── Toast (#1) ──
@@ -360,7 +380,7 @@ function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
 async function startDraw() {
   if (isSpinning.value || !canDraw.value) return
   isSpinning.value = true
-  pushState({ prize: currentPrize.value?.name, remaining: remainingSlots.value, spinning: true })
+  pushState(remoteState({ spinning: true }))
 
   const count = Math.min(drawCount.value, effectiveDrawMax.value)
 
@@ -420,7 +440,7 @@ async function startDraw() {
   }
 
   // 推送最新狀態到遙控器（含 spinning: false）
-  pushState({ prize: currentPrize.value?.name, remaining: remainingSlots.value, spinning: false })
+  pushState(remoteState({ spinning: false }))
 
   isSpinning.value = false
 }
@@ -446,6 +466,12 @@ function launchConfetti() {
 const { myPeerId, peerConnected, pushState, init: initPeer, destroy: destroyPeer } = useHostPeer((count) => {
   drawCount.value = Math.min(count, remainingSlots.value) || 1
   startDraw()
+}, (idx) => {
+  // 遙控器切換獎項：抽獎中或已抽完的獎項不切換
+  const p = prizes.value[idx]
+  if (isSpinning.value || !p || p.winners.length >= p.total) return
+  selectedPrizeIdx.value = idx
+  drawCount.value = 1
 })
 
 // Store peer info in localStorage so admin page can build the remote QR
@@ -455,7 +481,7 @@ watch(myPeerId, id => {
 watch(peerConnected, v => {
   localStorage.setItem('lottery_peer_connected', String(v))
   // 遙控器剛連線時立刻推送當前狀態，讓「等待主畫面同步」立即消失
-  if (v) pushState({ prize: currentPrize.value?.name, remaining: remainingSlots.value, spinning: isSpinning.value })
+  if (v) pushState(remoteState())
 })
 
 // ── Admin QR Code ──

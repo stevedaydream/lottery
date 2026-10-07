@@ -13,18 +13,23 @@ const PEER_CONFIG = {
   },
 }
 
-export function useHostPeer(onDrawCommand) {
+export function useHostPeer(onDrawCommand, onSelectCommand) {
   const myPeerId      = ref('')
   const qrUrl         = ref('')
   const peerConnected = ref(false)
   let peer = null
-  let activeConn = null
+  // 手機遙控器與後台可同時連線，狀態廣播給所有連線
+  const conns = new Set()
+  let lastState = null
+
+  function sendState(conn, state) {
+    try { conn.send({ type: 'STATE', ...state }) } catch {}
+  }
 
   // 推送當前抽獎狀態到遙控器（含 spinning 狀態）
   function pushState(state) {
-    if (activeConn && peerConnected.value) {
-      try { activeConn.send({ type: 'STATE', ...state }) } catch {}
-    }
+    lastState = state
+    conns.forEach(conn => sendState(conn, state))
   }
 
   function init() {
@@ -37,15 +42,19 @@ export function useHostPeer(onDrawCommand) {
     })
 
     peer.on('connection', conn => {
-      activeConn = conn
-      peerConnected.value = true
-
+      conn.on('open', () => {
+        conns.add(conn)
+        peerConnected.value = true
+        // 新連上的遙控器立即收到目前狀態
+        if (lastState) sendState(conn, lastState)
+      })
       conn.on('data', data => {
         if (data?.type === 'DRAW') onDrawCommand(data.count ?? 1)
+        if (data?.type === 'SELECT' && onSelectCommand) onSelectCommand(data.idx)
       })
       conn.on('close', () => {
-        peerConnected.value = false
-        activeConn = null
+        conns.delete(conn)
+        peerConnected.value = conns.size > 0
       })
     })
 
@@ -59,12 +68,16 @@ export function useHostPeer(onDrawCommand) {
 
   function destroy() {
     if (peer) { peer.destroy(); peer = null }
+    conns.clear()
+    peerConnected.value = false
   }
 
   return { myPeerId, qrUrl, peerConnected, pushState, init, destroy }
 }
 
-export function useRemotePeer(targetId) {
+// target：主畫面的 peer ID，或回傳最新 ID 的函式（主畫面重新整理後 ID 會變）
+export function useRemotePeer(target) {
+  const getTargetId = typeof target === 'function' ? target : () => target
   const remoteConnected    = ref(false)
   const remoteError        = ref('')
   const remoteState        = ref(null)    // { prize, remaining }
@@ -88,6 +101,8 @@ export function useRemotePeer(targetId) {
   }
 
   function openConn() {
+    const targetId = getTargetId()
+    if (!targetId) { remoteError.value = '尚未取得主畫面 ID，請先開啟主畫面'; return }
     remoteConn = remotePeer.connect(targetId, { reliable: true })
     remoteConn.on('open', () => {
       remoteConnected.value = true
@@ -132,10 +147,19 @@ export function useRemotePeer(targetId) {
     if (remoteConn && remoteConnected.value) remoteConn.send({ type: 'DRAW', count })
   }
 
-  function destroy() {
-    if (reconnectTick) clearInterval(reconnectTick)
-    if (remotePeer) { remotePeer.destroy(); remotePeer = null }
+  // 切換主畫面目前的獎項（idx 為獎項清單的索引）
+  function sendSelect(idx) {
+    if (remoteConn && remoteConnected.value) remoteConn.send({ type: 'SELECT', idx })
   }
 
-  return { remoteConnected, remoteError, remoteState, remoteIsSpinning, reconnectCountdown, init, sendDraw, destroy }
+  function destroy() {
+    if (reconnectTick) { clearInterval(reconnectTick); reconnectTick = null }
+    if (remotePeer) { remotePeer.destroy(); remotePeer = null }
+    remoteConn = null
+    remoteConnected.value = false
+    remoteIsSpinning.value = false
+    reconnectCountdown.value = 0
+  }
+
+  return { remoteConnected, remoteError, remoteState, remoteIsSpinning, reconnectCountdown, init, sendDraw, sendSelect, destroy }
 }

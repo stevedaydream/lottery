@@ -15,9 +15,17 @@
 
     <!-- Prize info from main display -->
     <div v-if="remoteState" class="remote-prize-info">
-      <div class="prize-label">目前獎項</div>
+      <label class="prize-label" for="prize-select">目前獎項{{ remoteState.prizes?.length ? '（點選切換）' : '' }}</label>
       <div class="prize-row">
-        <div class="prize-name">{{ remoteState.prize }}</div>
+        <select v-if="remoteState.prizes?.length" id="prize-select" class="prize-select"
+          :value="remoteState.prizeIdx"
+          :disabled="remoteIsSpinning || !remoteConnected"
+          @change="sendSelect(Number($event.target.value))">
+          <option v-for="(p, i) in remoteState.prizes" :key="i" :value="i" :disabled="p.remaining <= 0">
+            {{ p.name }}{{ p.remaining <= 0 ? '（已抽完）' : '' }}
+          </option>
+        </select>
+        <div v-else class="prize-name">{{ remoteState.prize }}</div>
         <div class="prize-remaining">
           <template v-if="remoteState.remaining > 0">尚餘 <b>{{ remoteState.remaining }}</b> 名</template>
           <span v-else class="all-drawn">全數抽出</span>
@@ -76,7 +84,7 @@ const props = defineProps({
   targetId: { type: String, required: true }
 })
 
-const { remoteConnected, remoteError, remoteState, remoteIsSpinning, reconnectCountdown, init, sendDraw, destroy } = useRemotePeer(props.targetId)
+const { remoteConnected, remoteError, remoteState, remoteIsSpinning, reconnectCountdown, init, sendDraw, sendSelect, destroy } = useRemotePeer(props.targetId)
 
 const drawCount = ref(1)
 
@@ -125,13 +133,31 @@ onUnmounted(destroy)
 .remote-prize-placeholder { color: var(--muted); font-size: 0.95rem; }
 .prize-label { font-size: 0.875rem; letter-spacing: 0.2em; color: var(--muted); }
 .remote-prize-info .prize-label { color: var(--accent); }
-.prize-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.prize-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .prize-name {
   font-family: var(--font-display);
   font-weight: 900;
   font-size: 2.2rem;
   overflow-wrap: anywhere;
 }
+.prize-select {
+  flex: 1;
+  min-width: 0;
+  min-height: 52px;
+  background: var(--ink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23B9A58A' d='M6 8L0 0h12z'/%3E%3C/svg%3E") no-repeat right 14px center;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  color: var(--cream);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.4rem;
+  padding: 0 38px 0 14px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.prize-select:disabled { opacity: 0.6; cursor: not-allowed; }
+.prize-select option { font-family: var(--font-body); font-weight: 500; font-size: 1rem; background: var(--surface); }
 .prize-remaining { font-size: 0.95rem; color: var(--muted); white-space: nowrap; }
 .prize-remaining b { font-family: var(--font-num); font-weight: 800; font-size: 1.75rem; color: var(--cream); }
 .all-drawn { color: var(--muted); }

@@ -72,7 +72,15 @@
             <!-- 當前獎項資訊 -->
             <div class="admin-prize-info" :class="{ 'no-data': !adminPeerState }">
               <template v-if="adminPeerState">
-                <span class="admin-prize-name">{{ adminPeerState.prize }}</span>
+                <select v-if="adminPeerState.prizes?.length" class="admin-prize-select" aria-label="切換抽獎獎項"
+                  :value="adminPeerState.prizeIdx"
+                  :disabled="adminIsSpinning || !adminPeerConnected"
+                  @change="adminSendSelect(Number($event.target.value))">
+                  <option v-for="(p, i) in adminPeerState.prizes" :key="i" :value="i" :disabled="p.remaining <= 0">
+                    {{ p.name }}{{ p.remaining <= 0 ? '（已抽完）' : '' }}
+                  </option>
+                </select>
+                <span v-else class="admin-prize-name">{{ adminPeerState.prize }}</span>
                 <span class="admin-prize-rem" v-if="adminPeerState.remaining > 0">剩餘 <b>{{ adminPeerState.remaining }}</b> 名</span>
                 <span class="admin-prize-rem all-done" v-else>全數抽出</span>
               </template>
@@ -419,8 +427,9 @@ const {
   reconnectCountdown: adminReconnectCountdown,
   init: initAdminPeer,
   sendDraw: adminSendDraw,
+  sendSelect: adminSendSelect,
   destroy: destroyAdminPeer,
-} = useRemotePeer(remotePeerId.value)
+} = useRemotePeer(() => remotePeerId.value)
 
 const adminDrawCount = ref(1)
 
@@ -440,6 +449,13 @@ watch(activeTab, (val, old) => {
   if (val === 'remote' && remotePeerId.value) initAdminPeer()
   if (old === 'remote') destroyAdminPeer()
   if (val === 'participants') fetchAll()
+})
+
+// 主畫面重新整理後 peer ID 會改變，停留在遙控器 tab 時自動改連新 ID
+watch(remotePeerId, id => {
+  if (activeTab.value !== 'remote' || !id) return
+  destroyAdminPeer()
+  initAdminPeer()
 })
 
 const remoteQrUrl = computed(() => {
@@ -1200,6 +1216,23 @@ onMounted(() => {
   font-size: 1rem;
   flex: 1;
 }
+.admin-prize-select {
+  flex: 1;
+  min-width: 0;
+  background: var(--ink) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23B9A58A' d='M6 8L0 0h12z'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 8px 34px 8px 12px;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+.admin-prize-select:disabled { opacity: 0.6; cursor: not-allowed; }
+.admin-prize-select option { background: var(--surface); }
 .admin-prize-rem { font-size: 0.82rem; color: rgba(255,255,255,0.5); }
 .admin-prize-rem b { color: var(--gold); }
 .admin-prize-rem.all-done { color: rgba(255,255,255,0.25); }
@@ -1852,7 +1885,8 @@ onMounted(() => {
 
   /* iOS 輸入框字級小於 16px 會自動放大畫面 */
   .admin-textarea, .title-setting-input, .name-input, .total-input,
-  .rank-input, .item-input, .deadline-input, .claim-search, .claim-filter-select { font-size: 16px; }
+  .rank-input, .item-input, .deadline-input, .claim-search, .claim-filter-select, .admin-prize-select { font-size: 16px; }
+  .admin-prize-select { flex: 1 1 100%; min-height: 44px; }
   .admin-textarea.large { height: 260px; }
 
   /* 遙控器 */
