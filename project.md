@@ -46,7 +46,7 @@ git push origin main
 - [ ] **GAS 中獎查詢網址**：`gas/Form.html` 的 `CHECK_BASE_URL` 仍指向 Netlify（`https://fancy-bombolone-80bcd2.netlify.app/`），改為 Vercel 網域後執行：
   ```bash
   clasp push
-  clasp deploy --deploymentId <deploy.txt 中的 id> -d v3
+  clasp deploy --deploymentId <見 secret.md> -d v3
   ```
 - [ ] （選用）停用舊 Netlify 站台 `fancy-bombolone-80bcd2`、處理舊 repo `boyprince03/lottery-vue`。
 
