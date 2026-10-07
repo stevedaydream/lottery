@@ -5,7 +5,7 @@
     <div v-if="!authed" class="login-wrap">
       <div class="login-card">
         <div class="login-logo">✦</div>
-        <div class="login-title">黑箱登入</div>
+        <div class="login-title">VIP 登入</div>
         <div class="login-sub">僅限授權帳號存取</div>
         <div v-if="clientId" id="vip-signin-btn" class="signin-btn-wrap"></div>
         <div v-else class="config-warn">尚未設定 <code>VITE_GOOGLE_CLIENT_ID</code></div>
@@ -17,7 +17,7 @@
     <div v-else class="vip-panel">
 
       <div class="vip-header">
-        <div class="vip-title">✦ VIP 黑箱設定</div>
+        <div class="vip-title">✦ VIP 設定</div>
         <div class="sync-status">
           <span v-if="syncing" class="sync-dot syncing">⟳</span>
           <span v-else-if="syncErr" class="sync-dot err" :title="syncErr">!</span>

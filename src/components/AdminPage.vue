@@ -29,7 +29,7 @@
             {{ syncErr ? 'GAS 同步失敗，點擊重試' : lastSync ? `${lastSync.toLocaleTimeString()} 同步` : 'GAS 未設定' }}
           </span>
         </div>
-        <a class="vip-entry-link" :href="vipPageUrl" target="_blank" title="VIP 黑箱設定">✦ VIP</a>
+        <a class="vip-entry-link" :href="vipPageUrl" target="_blank" title="VIP 設定">✦ VIP</a>
         <div class="admin-user">{{ userEmail }}</div>
         <button class="logout-btn" @click="logout">登出</button>
       </div>
