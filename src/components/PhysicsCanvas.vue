@@ -3,12 +3,15 @@
     <div class="canvas-wrap" ref="canvasWrap">
       <canvas ref="physicsCanvas"></canvas>
       <div class="canvas-glow" :class="{ spinning: isSpinning }"></div>
-      <div class="prize-badge" v-if="currentPrize">
-        🏆 {{ currentPrize.name }}
-      </div>
-      <div class="countdown-overlay" v-if="countdown > 0">
+    </div>
+    <div class="countdown-overlay" v-if="countdown > 0">
+      <div class="countdown-ring">
+        <div class="countdown-prize">{{ currentPrize?.name }} · 抽出 {{ drawCount }} 位</div>
         <div class="countdown-num" :key="countdown">{{ countdown }}</div>
-        <div class="countdown-label">攪拌中，請稍候...</div>
+        <div class="countdown-label">屏息以待</div>
+      </div>
+      <div class="countdown-dots">
+        <span v-for="i in 5" :key="i" :class="{ on: i <= 6 - countdown }"></span>
       </div>
     </div>
   </div>
@@ -23,6 +26,7 @@ const props = defineProps({
   isSpinning: { type: Boolean, default: false },
   countdown: { type: Number, default: 0 },
   currentPrize: { type: Object, default: null },
+  drawCount: { type: Number, default: 1 },
 })
 
 const emit = defineEmits(['ready'])

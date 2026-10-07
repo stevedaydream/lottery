@@ -12,15 +12,27 @@
   <PrizeLookupPage v-else-if="isCheckPage" />
 
   <!-- Main Display Page -->
-  <template v-else>
-    <div class="header">
-      <div class="header-title">🎊 {{ eventTitle }} 🎊</div>
-      <div class="header-sub">ANNUAL LUCKY DRAW · {{ new Date().getFullYear() }}</div>
-      <div class="header-deco">
-        <span></span><i>✦</i><span></span>
+  <div v-else class="stage">
+    <header class="header">
+      <div class="header-brand">
+        <div class="header-title">{{ eventTitle }}</div>
+        <div class="header-sub">LUCKY DRAW · {{ new Date().getFullYear() }}</div>
       </div>
-      <!-- Admin entry button (discreet, top-right) -->
-      <button class="admin-entry-btn" @click="showAdminQr = !showAdminQr" title="管理員入口">⚙</button>
+      <div class="header-meta">
+        <div class="header-stat">
+          <span class="status-dot" :class="peerConnected ? 'connected' : 'waiting'"></span>
+          <span>{{ peerConnected ? '遙控器已連線' : '等待遙控器' }}</span>
+        </div>
+        <div class="header-stat">
+          <span>池中</span>
+          <span class="header-stat-num">{{ availableParticipants.length }}</span>
+          <span>人</span>
+        </div>
+        <!-- Admin entry button -->
+        <button class="admin-entry-btn" @click="showAdminQr = !showAdminQr" title="管理員入口" aria-label="管理員入口">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
 
       <!-- Admin QR Modal -->
       <div v-if="showAdminQr" class="admin-qr-backdrop" @click.self="showAdminQr = false">
@@ -32,11 +44,11 @@
           <button class="admin-qr-close" @click="showAdminQr = false">關閉</button>
         </div>
       </div>
-    </div>
+    </header>
 
     <div class="main-layout">
       <!-- LEFT: Prizes + Participants -->
-      <div style="display:flex;flex-direction:column;gap:16px;">
+      <aside class="side-col">
         <PrizePanel
           :prizes="prizes"
           :selected-idx="selectedPrizeIdx"
@@ -48,26 +60,41 @@
           :form-url="gasUrl"
           :deadline="registrationDeadline"
         />
-      </div>
+      </aside>
 
-      <!-- CENTER: Canvas -->
-      <div style="display:flex;flex-direction:column;gap:16px;">
+      <!-- CENTER: 現正抽出 + 球池 -->
+      <main class="center-col">
+        <div class="now-drawing">
+          <div style="min-width:0">
+            <div class="now-label">現正抽出</div>
+            <div class="now-prize">
+              {{ prizeTitle.main }}<span v-if="prizeTitle.sub" class="now-prize-sub">{{ prizeTitle.sub }}</span>
+            </div>
+          </div>
+          <div v-if="currentPrize" class="now-remain">
+            <div class="now-remain-label">尚餘名額</div>
+            <div class="now-remain-num">{{ remainingSlots }}<small>/{{ currentPrize.total }}</small></div>
+          </div>
+        </div>
         <PhysicsCanvas
           ref="physicsCanvasRef"
+          style="flex:1;min-height:0"
           :participants="availableParticipants"
           :is-spinning="isSpinning"
           :countdown="countdown"
           :current-prize="currentPrize"
+          :draw-count="drawCount"
         />
-        <div style="text-align:center;font-size:0.78rem;color:var(--text-muted);letter-spacing:0.1em;">
-          {{ canDraw ? `使用手機遙控或後台觸發抽獎 · 當前獎項：${currentPrize?.name ?? '-'}` : '請確認有獎項且有參與者' }}
+        <div class="stage-hint">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>
+          <span>{{ canDraw ? '等待遙控器或後台觸發抽獎' : '請確認有獎項且有參與者' }}</span>
         </div>
-      </div>
+      </main>
 
       <!-- RIGHT: Winners -->
-      <div style="display:flex;flex-direction:column;gap:16px;" class="panel-right">
+      <aside class="side-col panel-right">
         <WinnersPanel :winners="allWinners" />
-      </div>
+      </aside>
     </div>
 
     <ResultModal
@@ -90,7 +117,7 @@
       @save="savePrize"
       @delete="deletePrize"
     />
-  </template>
+  </div>
 </template>
 
 <script setup>
@@ -137,6 +164,14 @@ const availableParticipants = computed(() => {
 // ── Prize selection ──
 const selectedPrizeIdx = ref(0)
 const currentPrize = computed(() => prizes.value[selectedPrizeIdx.value] || null)
+
+// 獎項名稱以「·」拆成主標（等第）與副標（獎品）
+const prizeTitle = computed(() => {
+  const name = currentPrize.value?.name
+  if (!name) return { main: '尚未設定獎項', sub: '' }
+  const [main, ...rest] = name.split(/\s*[·・]\s*/)
+  return { main, sub: rest.join(' · ') }
+})
 
 // Keep selectedPrizeIdx in bounds when prizes change from admin
 watch(prizes, () => {
@@ -350,8 +385,8 @@ async function startDraw() {
     const winnerBody = bodies.find(b => b.label === result.name)
     if (winnerBody) {
       const originalColors = bodies.map(b => b._color)
-      bodies.forEach(b => { if (b !== winnerBody) b._color = '#333333' })
-      winnerBody._color = '#FFD700'
+      bodies.forEach(b => { if (b !== winnerBody) b._color = '#3A2224' })
+      winnerBody._color = '#E8452C'
       await sleep(count === 1 ? 800 : 500)
       bodies.forEach((b, i) => { b._color = originalColors[i] })
     }
@@ -399,7 +434,7 @@ function closeResult() {
 function launchConfetti() {
   const duration = 3000
   const animEnd = Date.now() + duration
-  const colors = ['#FFD700', '#FF0000', '#FFE866', '#CC0000', '#FFF']
+  const colors = ['#FFF6EA', '#F3C969', '#170B0C', '#F3E3C3']
   ;(function frame() {
     confetti({ particleCount: 8, angle: 60,  spread: 55, origin: { x: 0 }, colors })
     confetti({ particleCount: 8, angle: 120, spread: 55, origin: { x: 1 }, colors })
@@ -573,43 +608,34 @@ onUnmounted(() => {
 
 /* ── Admin entry button ── */
 .admin-entry-btn {
-  position: absolute;
-  top: 16px;
-  right: 20px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 8px;
-  color: rgba(255,255,255,0.2);
-  font-size: 1rem;
-  width: 32px;
-  height: 32px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--muted);
   cursor: pointer;
-  transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: color 0.2s, border-color 0.2s;
 }
-.admin-entry-btn:hover {
-  color: var(--gold-dark);
-  border-color: rgba(255,215,0,0.2);
-  background: rgba(255,215,0,0.05);
-}
+.admin-entry-btn:hover { color: var(--cream); border-color: var(--muted); }
 
 /* ── Admin QR overlay ── */
 .admin-qr-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.7);
+  background: rgba(23,11,12,0.8);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 500;
-  backdrop-filter: blur(4px);
 }
 .admin-qr-card {
-  background: var(--bg-card);
-  border: 1px solid rgba(255,215,0,0.2);
-  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 24px;
   padding: 36px 32px;
   text-align: center;
   display: flex;
@@ -618,10 +644,10 @@ onUnmounted(() => {
   gap: 14px;
 }
 .admin-qr-title {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 1.4rem;
-  letter-spacing: 0.2em;
-  color: var(--gold);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.5rem;
+  letter-spacing: 0.12em;
 }
 .admin-qr-img {
   width: 200px;
@@ -631,28 +657,26 @@ onUnmounted(() => {
   padding: 4px;
 }
 .admin-qr-sub {
-  font-size: 0.78rem;
-  color: var(--text-muted);
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 .admin-qr-close {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 8px;
-  color: var(--text-muted);
-  font-family: 'Noto Serif TC', serif;
-  font-size: 0.85rem;
-  padding: 8px 24px;
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: 22px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  height: 44px;
+  padding: 0 28px;
   cursor: pointer;
-  transition: all 0.2s;
 }
 .admin-qr-link {
-  font-size: 0.8rem;
-  color: var(--gold-dark);
+  font-size: 0.85rem;
+  color: var(--cream);
   text-decoration: none;
-  letter-spacing: 0.05em;
 }
-.admin-qr-link:hover { color: var(--gold); text-decoration: underline; }
-.admin-qr-close:hover { background: rgba(255,255,255,0.12); color: var(--text-light); }
+.admin-qr-link:hover { text-decoration: underline; }
+.admin-qr-close:hover { color: var(--cream); border-color: var(--muted); }
 
 /* ── Toast (#1) ── */
 .toast-msg {
@@ -660,15 +684,13 @@ onUnmounted(() => {
   bottom: 32px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(20, 20, 30, 0.92);
-  border: 1px solid rgba(255,215,0,0.3);
+  background: var(--cream);
   border-radius: 24px;
-  color: var(--gold);
-  font-family: 'Noto Serif TC', serif;
-  font-size: 0.88rem;
-  padding: 10px 24px;
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 12px 28px;
   z-index: 999;
-  backdrop-filter: blur(8px);
   white-space: nowrap;
   pointer-events: none;
 }

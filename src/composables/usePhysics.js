@@ -1,22 +1,13 @@
 import Matter from 'matter-js'
 
-const BALL_COLORS = [
-  '#CC0000','#B8860B','#8B0000','#DAA520','#A0522D',
-  '#CD853F','#8B4513','#D2691E','#C0392B','#E74C3C',
-]
+// 球色：朱紅、香檳、深栗、空心（以 null 表示只畫外框）
+const BALL_COLORS = ['#E8452C', '#F3E3C3', null, '#F3E3C3', '#5A2A26']
 
-function lightenColor(hex, amount) {
-  const r = Math.min(255, parseInt(hex.slice(1,3),16) + amount)
-  const g = Math.min(255, parseInt(hex.slice(3,5),16) + amount)
-  const b = Math.min(255, parseInt(hex.slice(5,7),16) + amount)
-  return `rgb(${r},${g},${b})`
-}
-
-function darkenColor(hex, amount) {
-  const r = Math.max(0, parseInt(hex.slice(1,3),16) - amount)
-  const g = Math.max(0, parseInt(hex.slice(3,5),16) - amount)
-  const b = Math.max(0, parseInt(hex.slice(5,7),16) - amount)
-  return `rgb(${r},${g},${b})`
+// 依底色亮度決定文字顏色
+function textColorFor(hex) {
+  if (!hex) return '#F3E3C3'
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16)
+  return (r * 299 + g * 587 + b * 114) / 1000 > 150 ? '#170B0C' : '#FFF6EA'
 }
 
 export function usePhysics() {
@@ -49,7 +40,7 @@ export function usePhysics() {
 
     bodies = []
     names.forEach((name, i) => {
-      const r = Math.max(18, Math.min(32, W / names.length / 1.5))
+      const r = Math.max(18, Math.min(38, W / names.length / 1.5))
       const body = Matter.Bodies.circle(
         Math.random() * (W - r*2) + r,
         Math.random() * (H - r*2) + r,
@@ -113,35 +104,22 @@ export function usePhysics() {
       const x = b.position.x
       const y = b.position.y
 
-      ctx.save()
-      ctx.shadowColor = b._color
-      ctx.shadowBlur = spinning ? 18 : 8
-
-      const grad = ctx.createRadialGradient(x - r*0.3, y - r*0.3, r*0.05, x, y, r)
-      grad.addColorStop(0, lightenColor(b._color, 60))
-      grad.addColorStop(0.5, b._color)
-      grad.addColorStop(1, darkenColor(b._color, 40))
-
       ctx.beginPath()
       ctx.arc(x, y, r, 0, Math.PI * 2)
-      ctx.fillStyle = grad
-      ctx.fill()
-      ctx.restore()
+      if (b._color) {
+        ctx.fillStyle = b._color
+        ctx.fill()
+      } else {
+        ctx.lineWidth = 2
+        ctx.strokeStyle = spinning ? 'rgba(243,227,195,0.7)' : 'rgba(243,227,195,0.5)'
+        ctx.stroke()
+      }
 
-      ctx.save()
-      ctx.beginPath()
-      ctx.arc(x - r*0.28, y - r*0.28, r*0.32, 0, Math.PI * 2)
-      ctx.fillStyle = 'rgba(255,255,255,0.2)'
-      ctx.fill()
-      ctx.restore()
-
-      const fontSize = Math.max(8, Math.min(r * 0.62, 14))
-      ctx.font = `bold ${fontSize}px "Noto Serif TC", serif`
-      ctx.fillStyle = '#fff'
+      const fontSize = Math.max(8, Math.min(r * 0.5, 17))
+      ctx.font = `700 ${fontSize}px "Noto Sans TC", sans-serif`
+      ctx.fillStyle = textColorFor(b._color)
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
-      ctx.shadowColor = 'rgba(0,0,0,0.6)'
-      ctx.shadowBlur = 3
 
       const label = b.label
       if (label.length <= 3 || r >= 24) {
@@ -150,7 +128,6 @@ export function usePhysics() {
         ctx.fillText(label.slice(0, 3), x, y - fontSize*0.5)
         ctx.fillText(label.slice(3, 6), x, y + fontSize*0.5)
       }
-      ctx.shadowBlur = 0
     })
 
     animFrameId = requestAnimationFrame(() => drawLoop(canvasEl))

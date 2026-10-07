@@ -1,25 +1,25 @@
 <template>
-  <div class="card">
-    <div class="card-title">👥 參與名單</div>
-
-    <!-- 報名 QR Code -->
-    <div v-if="formUrl" class="reg-qr-block">
-      <img :src="qrImgUrl" alt="報名 QR Code" class="reg-qr-img" />
-      <div class="reg-qr-label">掃描報名</div>
-      <div v-if="deadlineCountdown" class="reg-countdown">
-        <span class="reg-countdown-label">截止倒數</span>
-        <span class="reg-countdown-value">{{ deadlineCountdown }}</span>
+  <div class="reg-card">
+    <div class="reg-row">
+      <img v-if="formUrl" :src="qrImgUrl" alt="報名 QR Code" class="reg-qr-img" />
+      <div class="reg-info">
+        <div class="reg-title">{{ formUrl ? '掃碼報名' : '參與名單' }}</div>
+        <div v-if="deadlineCountdown" class="reg-sub">截止倒數 <b>{{ deadlineCountdown }}</b></div>
+        <div v-else-if="deadline" class="reg-sub reg-closed">報名已截止</div>
+        <div class="reg-sub">共 {{ count }} 位</div>
       </div>
-      <div v-else-if="deadline" class="reg-closed">報名已截止</div>
     </div>
 
-    <textarea
-      class="participant-textarea"
-      :value="modelValue"
-      @input="$emit('update:modelValue', $event.target.value)"
-      placeholder=""
-    ></textarea>
-    <div class="participant-count">共 {{ count }} 位</div>
+    <details class="reg-edit">
+      <summary>手動編輯名單</summary>
+      <textarea
+        class="participant-textarea"
+        :value="modelValue"
+        @input="$emit('update:modelValue', $event.target.value)"
+        placeholder="一行一位"
+        aria-label="參與名單"
+      ></textarea>
+    </details>
   </div>
 </template>
 
@@ -58,51 +58,34 @@ const deadlineCountdown = computed(() => {
 </script>
 
 <style scoped>
-.reg-qr-block {
+.reg-card {
+  margin-top: auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 12px 0 10px;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-  margin-bottom: 10px;
+  gap: 12px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  flex-shrink: 0;
 }
+.reg-row { display: flex; gap: 16px; align-items: center; }
 .reg-qr-img {
-  width: 120px;
-  height: 120px;
+  width: 96px;
+  height: 96px;
   border-radius: 8px;
   background: #fff;
   padding: 4px;
+  flex-shrink: 0;
 }
-.reg-qr-label {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  letter-spacing: 0.1em;
-}
-.reg-countdown {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(0,0,0,0.25);
-  border: 1px solid rgba(255,215,0,0.2);
-  border-radius: 8px;
-  padding: 4px 10px;
-}
-.reg-countdown-label {
-  font-size: 0.65rem;
-  color: var(--text-muted);
-  letter-spacing: 0.05em;
-}
-.reg-countdown-value {
-  font-size: 0.9rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--gold);
-  letter-spacing: 0.05em;
-}
-.reg-closed {
-  font-size: 0.75rem;
-  color: #ff6666;
-  font-weight: 700;
+.reg-info { display: flex; flex-direction: column; gap: 4px; }
+.reg-title { font-size: 1.15rem; font-weight: 700; }
+.reg-sub { font-size: 0.95rem; color: var(--muted); }
+.reg-sub b { font-family: var(--font-num); font-weight: 800; font-size: 1.2rem; color: var(--cream); font-variant-numeric: tabular-nums; }
+.reg-closed { color: #F08A78; }
+.reg-edit summary {
+  font-size: 0.85rem;
+  color: var(--muted);
+  cursor: pointer;
+  margin-bottom: 8px;
 }
 </style>

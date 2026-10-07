@@ -3,16 +3,16 @@
 
     <!-- Header -->
     <div class="lookup-header">
-      <div class="lookup-icon">🎫</div>
       <div class="lookup-title">中獎查詢</div>
-      <div class="lookup-sub">PRIZE LOOKUP · 請輸入您的兌獎碼</div>
+      <div class="lookup-sub">{{ lastFetched ? '每 30 秒自動更新' : '請輸入您的兌獎碼' }}</div>
     </div>
 
     <!-- Code input form -->
     <div v-if="!queriedCode" class="lookup-card">
-      <div class="card-label">輸入 6 位兌獎碼</div>
+      <label class="card-label" for="code-input">輸入 6 位兌獎碼</label>
       <div class="code-input-row">
         <input
+          id="code-input"
           v-model="inputCode"
           class="code-input"
           type="text"
@@ -44,7 +44,6 @@
 
       <!-- Error -->
       <div v-else-if="fetchError && !lastFetched" class="status-card status-error">
-        <div class="status-icon">⚠️</div>
         <div>{{ fetchError }}</div>
         <button class="retry-btn" @click="fetchResults">重試</button>
       </div>
@@ -58,17 +57,26 @@
 
         <!-- ── Identity Card (for showing to staff) ── -->
         <div class="identity-card">
-          <div class="id-card-label">身分核對卡 · 請出示給工作人員</div>
-          <div class="id-name">{{ personName }}</div>
-          <div class="id-unit">{{ personUnit }}</div>
-          <div class="id-code">兌獎碼 {{ queriedCode }}</div>
+          <div class="id-card-head">
+            <span>身分核對卡</span>
+            <span>請出示給工作人員</span>
+          </div>
+          <div class="id-card-body">
+            <div>
+              <div class="id-name">{{ personName }}</div>
+              <div class="id-unit">{{ personUnit }}</div>
+            </div>
+            <div class="id-code">
+              <span class="id-code-label">兌獎碼</span>
+              <span class="id-code-value">{{ queriedCode }}</span>
+            </div>
+          </div>
         </div>
 
         <!-- Won prizes -->
         <template v-if="myPrizes.length > 0">
           <div class="won-header">
-            <div class="won-icon">🏆</div>
-            <div class="won-text">恭喜中獎！</div>
+            <div class="won-text">恭喜中獎</div>
             <div class="won-count">共 {{ myPrizes.length }} 個獎項</div>
           </div>
 
@@ -82,7 +90,7 @@
               <div class="prize-rank">{{ i + 1 }}</div>
               <div class="prize-info">
                 <div class="prize-name">{{ item.prize }}</div>
-                <div v-if="item.vip" class="vip-badge">⭐ 特別保送</div>
+                <div v-if="item.vip" class="vip-badge">特別保送</div>
               </div>
               <div class="prize-claim-status">
                 <span v-if="item.claimed" class="claimed-tag">
@@ -99,7 +107,6 @@
 
         <!-- Not yet won -->
         <div v-else class="status-card status-waiting">
-          <div class="wait-icon">🎰</div>
           <div class="wait-title">尚未中獎</div>
           <div class="wait-sub">抽獎進行中，敬請期待！</div>
         </div>
@@ -114,7 +121,9 @@
         <span v-else class="refresh-live">
           <span class="live-dot"></span>更新中
         </span>
-        <button class="refresh-btn" @click="fetchResults" :disabled="loading">↻</button>
+        <button class="refresh-btn" @click="fetchResults" :disabled="loading" aria-label="立即更新">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+        </button>
       </div>
 
       <!-- Search another code -->
@@ -236,230 +245,130 @@ function formatTime(iso) {
 </script>
 
 <style scoped>
+/* 查詢頁採淺色底，方便現場出示 */
 .lookup-page {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 32px 20px 60px;
+  padding: 28px 20px 60px;
   gap: 20px;
-  background: var(--bg-dark, #0d0d14);
+  background: #F6EEDF;
+  color: var(--ink);
 }
+.lookup-page > * { width: 100%; max-width: 440px; }
 
 /* ── Header ── */
-.lookup-header { text-align: center; }
-.lookup-icon { font-size: 2.8rem; margin-bottom: 8px; }
+.lookup-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .lookup-title {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 1.8rem;
-  letter-spacing: 0.2em;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 1.4rem;
+  letter-spacing: 0.06em;
 }
-.lookup-sub {
-  font-size: 0.72rem;
-  color: rgba(255,255,255,0.25);
-  letter-spacing: 0.18em;
-  margin-top: 4px;
-}
+.lookup-sub { font-size: 0.82rem; color: #6B5A4C; }
 
 /* ── Code input ── */
 .lookup-card {
-  width: 100%;
-  max-width: 400px;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,215,0,0.15);
-  border-radius: 16px;
-  padding: 24px 20px;
-}
-.card-label {
-  font-size: 0.82rem;
-  color: rgba(255,255,255,0.4);
-  letter-spacing: 0.08em;
-  margin-bottom: 14px;
-  text-align: center;
-}
-.code-input-row {
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 22px 20px;
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 12px;
 }
+.card-label { font-size: 0.82rem; color: #6B5A4C; letter-spacing: 0.2em; }
+.code-input-row { display: flex; gap: 8px; }
 .code-input {
   flex: 1;
-  background: rgba(255,255,255,0.05);
-  border: 1px solid rgba(255,215,0,0.2);
-  border-radius: 10px;
-  color: #ffd700;
-  font-family: 'Courier New', monospace;
-  font-size: 1.4rem;
-  font-weight: 700;
-  letter-spacing: 0.25em;
-  padding: 12px 14px;
+  min-width: 0;
+  height: 52px;
+  background: #FFFFFF;
+  border: 1px solid #CDBDA6;
+  border-radius: 14px;
+  color: var(--ink);
+  font-family: var(--font-num);
+  font-weight: 800;
+  font-size: 1.6rem;
+  letter-spacing: 0.2em;
+  padding: 0 16px;
   outline: none;
   text-transform: uppercase;
-  transition: border-color 0.2s;
   text-align: center;
 }
-.code-input:focus { border-color: rgba(255,215,0,0.5); }
-.code-input::placeholder { color: rgba(255,255,255,0.15); font-size: 1rem; letter-spacing: 0.1em; }
+.code-input:focus { border-color: var(--ink); }
+.code-input::placeholder { color: #A8977F; font-family: var(--font-body); font-weight: 400; font-size: 1rem; letter-spacing: 0.1em; }
 .query-btn {
-  padding: 12px 20px;
-  background: linear-gradient(135deg, #b8860b, #ffd700);
+  height: 52px;
+  padding: 0 22px;
+  background: var(--ink);
   border: none;
-  border-radius: 10px;
-  color: #000;
-  font-family: 'Noto Serif TC', serif;
+  border-radius: 14px;
+  color: var(--cream);
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 1rem;
   cursor: pointer;
   white-space: nowrap;
-  transition: opacity 0.15s;
 }
-.query-btn:hover:not(:disabled) { opacity: 0.85; }
 .query-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.code-hint {
-  font-size: 0.72rem;
-  color: rgba(255,255,255,0.2);
-  text-align: center;
-  margin-top: 10px;
-}
-.input-error {
-  font-size: 0.8rem;
-  color: #ff6b6b;
-  text-align: center;
-  margin-top: 8px;
-}
+.code-hint { font-size: 0.8rem; color: #6B5A4C; }
+.input-error { font-size: 0.85rem; color: #9E2A18; }
 
 /* ── Identity Card ── */
 .identity-card {
-  width: 100%;
-  max-width: 400px;
-  background: linear-gradient(145deg, rgba(184,134,11,0.12), rgba(255,215,0,0.06));
-  border: 2px solid rgba(255,215,0,0.35);
-  border-radius: 18px;
-  padding: 24px 20px;
-  text-align: center;
-  position: relative;
-  overflow: hidden;
-}
-.identity-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0; height: 3px;
-  background: linear-gradient(90deg, transparent, #b8860b, #ffd700, #b8860b, transparent);
-}
-.id-card-label {
-  font-size: 0.7rem;
-  color: rgba(255,215,0,0.45);
-  letter-spacing: 0.12em;
-  margin-bottom: 14px;
-  text-transform: uppercase;
-}
-.id-name {
-  font-family: 'Noto Serif TC', serif;
-  font-size: 2.6rem;
-  font-weight: 900;
-  color: #ffd700;
-  letter-spacing: 0.15em;
-  line-height: 1;
-  margin-bottom: 8px;
-}
-.id-unit {
-  font-size: 1rem;
-  color: rgba(255,255,255,0.5);
-  letter-spacing: 0.2em;
-  margin-bottom: 14px;
-}
-.id-code {
-  display: inline-block;
-  font-family: 'Courier New', monospace;
-  font-size: 0.9rem;
-  letter-spacing: 0.2em;
-  color: rgba(255,215,0,0.5);
-  background: rgba(0,0,0,0.3);
-  border: 1px solid rgba(255,215,0,0.15);
-  border-radius: 6px;
-  padding: 4px 12px;
-}
-
-/* ── Won header ── */
-.won-header { text-align: center; }
-.won-icon {
-  font-size: 3rem;
-  animation: trophy-bounce 0.6s ease-out;
-}
-.won-text {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 1.8rem;
-  letter-spacing: 0.2em;
-  background: linear-gradient(135deg, #b8860b, #ffd700, #fffacd, #ffd700);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.won-count {
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.3);
-  letter-spacing: 0.1em;
-  margin-top: 2px;
-}
-@keyframes trophy-bounce {
-  0%   { transform: scale(0.5) rotate(-10deg); opacity: 0; }
-  60%  { transform: scale(1.15) rotate(3deg); }
-  100% { transform: scale(1) rotate(0); opacity: 1; }
-}
-
-/* ── Prize cards ── */
-.prize-list {
-  width: 100%;
-  max-width: 400px;
+  background: var(--ink);
+  color: var(--cream);
+  border-radius: 24px;
+  padding: 24px 22px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 18px;
 }
+.id-card-head { display: flex; justify-content: space-between; font-size: 0.82rem; color: var(--muted); letter-spacing: 0.12em; }
+.id-card-body { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.id-name {
+  font-family: var(--font-display);
+  font-size: 2.75rem;
+  font-weight: 900;
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+.id-unit { font-size: 0.95rem; color: var(--muted); margin-top: 4px; }
+.id-code { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.id-code-label { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.2em; }
+.id-code-value { font-family: var(--font-num); font-weight: 800; font-size: 2.25rem; letter-spacing: 0.12em; line-height: 1; }
+
+/* ── Won header ── */
+.won-header { display: flex; justify-content: space-between; align-items: baseline; }
+.won-text { font-size: 0.82rem; letter-spacing: 0.24em; color: #6B5A4C; }
+.won-count { font-size: 0.82rem; color: #6B5A4C; }
+
+/* ── Prize cards ── */
+.prize-list { display: flex; flex-direction: column; gap: 10px; }
 .prize-card {
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: rgba(255,215,0,0.06);
-  border: 1px solid rgba(255,215,0,0.2);
-  border-radius: 14px;
-  padding: 14px 16px;
+  gap: 14px;
+  background: #FFFFFF;
+  border-radius: 20px;
+  padding: 18px 20px;
   animation: slide-in 0.3s ease-out both;
-  transition: opacity 0.2s;
 }
-.prize-card.is-claimed {
-  opacity: 0.55;
-  background: rgba(255,255,255,0.03);
-  border-color: rgba(255,255,255,0.08);
-}
-.prize-card.is-vip {
-  border-color: rgba(255,215,0,0.4);
-  background: rgba(255,215,0,0.08);
-}
+.prize-card.is-claimed { opacity: 0.7; }
 @keyframes slide-in {
   from { transform: translateY(10px); opacity: 0; }
   to   { transform: translateY(0); opacity: 1; }
 }
-.prize-rank {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 1.2rem;
-  color: rgba(255,255,255,0.2);
-  min-width: 18px;
-}
-.prize-info { flex: 1; }
+.prize-rank { font-family: var(--font-num); font-weight: 800; font-size: 1.3rem; color: #A8977F; min-width: 18px; }
+.prize-info { flex: 1; min-width: 0; }
 .prize-name {
-  font-family: 'Noto Serif TC', serif;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #ffd700;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 900;
+  color: #9E2A18;
+  overflow-wrap: anywhere;
 }
-.vip-badge {
-  font-size: 0.7rem;
-  color: rgba(255,215,0,0.55);
-  margin-top: 2px;
-}
+.vip-badge { font-size: 0.78rem; color: #6B5A4C; margin-top: 2px; }
 .prize-claim-status { text-align: right; white-space: nowrap; }
 .claimed-tag {
   display: flex;
@@ -468,146 +377,98 @@ function formatTime(iso) {
   gap: 2px;
   font-size: 0.9rem;
   font-weight: 700;
-  color: #4caf50;
+  color: #1F6B3F;
+  background: #DDEFE3;
+  border-radius: 12px;
+  padding: 8px 12px;
 }
-.claimed-time {
-  font-size: 0.68rem;
-  color: rgba(255,255,255,0.25);
-}
+.claimed-time { font-size: 0.72rem; font-weight: 400; }
 .unclaimed-tag {
+  display: inline-block;
   font-size: 0.9rem;
   font-weight: 700;
-  color: #ff9800;
-  border: 1px solid rgba(255,152,0,0.4);
-  border-radius: 8px;
-  padding: 5px 12px;
-  background: rgba(255,152,0,0.08);
+  color: #7A3A0C;
+  background: #FBE7D3;
+  border-radius: 12px;
+  padding: 8px 12px;
 }
 
 /* ── Status cards ── */
 .status-card {
-  width: 100%;
-  max-width: 400px;
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 32px 20px;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
-}
-.status-loading {
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.08);
-  color: rgba(255,255,255,0.4);
-  flex-direction: row;
-  justify-content: center;
   gap: 10px;
-  padding: 20px;
-  font-size: 0.9rem;
+  background: #FFFFFF;
 }
-.status-error {
-  background: rgba(200,0,0,0.08);
-  border: 1px solid rgba(200,0,0,0.2);
-  color: #ff6b6b;
-  font-size: 0.9rem;
-}
-.status-waiting {
-  background: rgba(255,215,0,0.04);
-  border: 1px solid rgba(255,215,0,0.1);
-}
-.status-icon { font-size: 2rem; }
-.wait-icon { font-size: 3rem; }
-.wait-title {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 1.6rem;
-  letter-spacing: 0.15em;
-  color: rgba(255,255,255,0.5);
-}
-.wait-sub {
-  font-size: 0.82rem;
-  color: rgba(255,255,255,0.25);
-}
+.status-loading { flex-direction: row; justify-content: center; padding: 20px; font-size: 0.95rem; color: #6B5A4C; }
+.status-error { color: #9E2A18; font-size: 0.95rem; }
+.wait-title { font-family: var(--font-display); font-weight: 900; font-size: 1.6rem; }
+.wait-sub { font-size: 0.9rem; color: #6B5A4C; }
 .retry-btn {
-  padding: 8px 20px;
-  background: rgba(255,107,107,0.12);
-  border: 1px solid rgba(255,107,107,0.3);
-  border-radius: 8px;
-  color: #ff6b6b;
-  font-family: 'Noto Serif TC', serif;
-  font-size: 0.85rem;
+  height: 44px;
+  padding: 0 22px;
+  background: var(--ink);
+  border: none;
+  border-radius: 22px;
+  color: var(--cream);
+  font-size: 0.9rem;
   cursor: pointer;
-  margin-top: 4px;
 }
 
 /* ── Refresh bar ── */
 .refresh-bar {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  font-size: 0.72rem;
-  color: rgba(255,255,255,0.22);
+  font-size: 0.8rem;
+  color: #6B5A4C;
 }
-.refresh-divider { opacity: 0.4; }
-.refresh-live {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: #4caf50;
-}
-.live-dot {
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: #4caf50;
-  animation: pulse 1s ease-in-out infinite;
-}
+.refresh-divider { opacity: 0.5; }
+.refresh-live { display: flex; align-items: center; gap: 4px; color: #1F6B3F; }
+.live-dot { width: 6px; height: 6px; border-radius: 50%; background: #1F6B3F; animation: pulse 1s ease-in-out infinite; }
 .refresh-btn {
   background: none;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 6px;
-  color: rgba(255,255,255,0.25);
-  font-size: 0.85rem;
-  width: 24px; height: 24px;
+  border: 1px solid #CDBDA6;
+  border-radius: 50%;
+  color: #6B5A4C;
+  width: 44px; height: 44px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s;
 }
-.refresh-btn:hover:not(:disabled) { border-color: rgba(255,215,0,0.3); color: rgba(255,215,0,0.5); }
-.refresh-btn:disabled { opacity: 0.3; }
+.refresh-btn:disabled { opacity: 0.4; }
 
 /* ── Search again ── */
 .search-again-btn {
-  background: none;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  color: rgba(255,255,255,0.22);
-  font-family: 'Noto Serif TC', serif;
-  font-size: 0.8rem;
-  padding: 8px 20px;
+  height: 52px;
+  background: var(--ink);
+  border: none;
+  border-radius: 14px;
+  color: var(--cream);
+  font-size: 1rem;
+  font-weight: 700;
   cursor: pointer;
-  letter-spacing: 0.05em;
-  transition: all 0.2s;
 }
-.search-again-btn:hover { border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.4); }
 
 /* ── Refresh overlay (non-blocking) ── */
 .refresh-overlay {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  font-size: 0.78rem;
-  color: rgba(255,215,0,0.5);
-  background: rgba(0,0,0,0.4);
-  border: 1px solid rgba(255,215,0,0.12);
-  border-radius: 20px;
-  padding: 6px 16px;
+  font-size: 0.82rem;
+  color: #6B5A4C;
 }
 .spinner-sm {
   width: 12px; height: 12px;
-  border: 2px solid rgba(255,215,0,0.2);
-  border-top-color: rgba(255,215,0,0.6);
+  border: 2px solid #CDBDA6;
+  border-top-color: var(--ink);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
   flex-shrink: 0;
@@ -616,8 +477,8 @@ function formatTime(iso) {
 /* ── Spinner ── */
 .spinner {
   width: 18px; height: 18px;
-  border: 2px solid rgba(255,255,255,0.1);
-  border-top-color: rgba(255,215,0,0.5);
+  border: 2px solid #CDBDA6;
+  border-top-color: var(--ink);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

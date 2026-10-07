@@ -49,3 +49,14 @@ git push origin main
   clasp deploy --deploymentId <deploy.txt 中的 id> -d v3
   ```
 - [ ] （選用）停用舊 Netlify 站台 `fancy-bombolone-80bcd2`、處理舊 repo `boyprince03/lottery-vue`。
+
+---
+
+## 2026-10-07 視覺重新設計「紅幕舞台」（分支 `feature/redesign`）
+
+- 設計稿：claude.ai Design 畫布「抽獎機重新設計」（主畫面、倒數、揭曉、手機遙控、中獎查詢五張）。
+- 色票集中在 `src/assets/main.css` 的 `:root`：深酒紅底 `--ink`、香檳 `--cream`、朱紅 `--accent`；字體 Noto Serif TC（標題／人名）、Noto Sans TC（內文）、Big Shoulders Display（數字）。舊變數 `--gold*`／`--red*` 保留並對應新色，後台與 VIP 頁沿用。
+- 主畫面改為滿版 100vh 三欄：左獎項＋報名卡（名單編輯收進「手動編輯名單」）、中「現正抽出」＋球池、右中獎名單；獎項名稱以「·」拆成主標／副標。
+- 倒數改為全螢幕覆蓋；結果改為整面朱紅底的名字卡（依人數 1／3／6／更多 自動縮放字級）。
+- 球池改平塗色（朱紅／香檳／深栗／空心），中獎高亮為朱紅。
+- 中獎查詢頁改淺色底。

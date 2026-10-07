@@ -1,14 +1,27 @@
 <template>
   <div id="remote-page">
-    <div style="font-size:3rem;margin-bottom:12px">🎰</div>
-    <div class="remote-title">手機遙控器</div>
+    <div class="remote-top">
+      <div class="remote-title">遙控器</div>
+      <div class="remote-status">
+        <div class="status-dot" :class="remoteConnected ? 'connected' : remoteError ? 'error' : 'waiting'"></div>
+        <span :class="remoteError && !remoteConnected ? 'remote-error' : ''">
+          {{ remoteConnected ? '已連線主畫面' : remoteError || '連線中...' }}
+        </span>
+        <span v-if="!remoteConnected && reconnectCountdown > 0" class="reconnect-hint">
+          · {{ reconnectCountdown }}s 後重試
+        </span>
+      </div>
+    </div>
 
     <!-- Prize info from main display -->
     <div v-if="remoteState" class="remote-prize-info">
-      <div class="prize-name">{{ remoteState.prize }}</div>
-      <div class="prize-remaining">
-        <span v-if="remoteState.remaining > 0">剩餘 <b>{{ remoteState.remaining }}</b> 個名額</span>
-        <span v-else class="all-drawn">全數抽出</span>
+      <div class="prize-label">目前獎項</div>
+      <div class="prize-row">
+        <div class="prize-name">{{ remoteState.prize }}</div>
+        <div class="prize-remaining">
+          <template v-if="remoteState.remaining > 0">尚餘 <b>{{ remoteState.remaining }}</b> 名</template>
+          <span v-else class="all-drawn">全數抽出</span>
+        </div>
       </div>
     </div>
     <div v-else class="remote-prize-info remote-prize-placeholder">
@@ -16,41 +29,42 @@
     </div>
 
     <!-- Draw count control -->
-    <div class="draw-count-ctrl">
-      <button class="count-btn" @click="drawCount = Math.max(1, drawCount - 1)" :disabled="remoteIsSpinning">－</button>
-      <span class="count-display">{{ drawCount }}</span>
-      <button class="count-btn" @click="drawCount = Math.min(maxCount, drawCount + 1)" :disabled="remoteIsSpinning">＋</button>
-      <span class="count-label-sm">位</span>
-    </div>
-    <div class="count-presets">
-      <button v-for="n in [3,5,10]" :key="n"
-        class="preset-btn"
-        :class="{ active: drawCount === n }"
-        :disabled="n > maxCount || remoteIsSpinning"
-        @click="drawCount = n">
-        {{ n }}
-      </button>
+    <div class="count-block">
+      <div class="prize-label">抽出人數</div>
+      <div class="draw-count-ctrl">
+        <button class="count-btn" aria-label="減少一位" @click="drawCount = Math.max(1, drawCount - 1)" :disabled="remoteIsSpinning">−</button>
+        <div><span class="count-display">{{ drawCount }}</span><span class="count-label-sm">位</span></div>
+        <button class="count-btn" aria-label="增加一位" @click="drawCount = Math.min(maxCount, drawCount + 1)" :disabled="remoteIsSpinning">+</button>
+      </div>
+      <div class="count-presets">
+        <button v-for="n in [3,5,10]" :key="n"
+          class="preset-btn"
+          :class="{ active: drawCount === n }"
+          :disabled="n > maxCount || remoteIsSpinning"
+          @click="drawCount = n">
+          {{ n }} 位
+        </button>
+      </div>
     </div>
 
     <!-- Big draw button: show spinning state #19 -->
-    <button class="big-red-btn"
-      :class="{ spinning: remoteIsSpinning }"
-      @pointerdown="triggerDraw"
-      :disabled="!remoteConnected || !canRemoteDraw || remoteIsSpinning">
-      <span v-if="remoteIsSpinning" class="btn-spinner"></span>
-      <span v-else>抽獎</span>
-    </button>
-
-    <!-- Status + reconnect countdown #17 -->
-    <div class="remote-status">
-      <div class="status-dot" :class="remoteConnected ? 'connected' : remoteError ? 'error' : 'waiting'"></div>
-      <span :class="remoteConnected ? 'remote-connected' : remoteError ? 'remote-error' : ''">
-        {{ remoteConnected ? '已連線至主機' : remoteError || '連線中...' }}
-      </span>
-      <span v-if="!remoteConnected && reconnectCountdown > 0" class="reconnect-hint">
-        · {{ reconnectCountdown }}s 後重試
-      </span>
+    <div class="btn-area">
+      <button class="big-red-btn"
+        :class="{ spinning: remoteIsSpinning }"
+        @pointerdown="triggerDraw"
+        :disabled="!remoteConnected || !canRemoteDraw || remoteIsSpinning">
+        <template v-if="remoteIsSpinning">
+          <span class="btn-spinner"></span>
+          <span class="btn-sub">請看大螢幕</span>
+        </template>
+        <template v-else>
+          <span>開抽</span>
+          <span class="btn-sub">抽出 {{ drawCount }} 位</span>
+        </template>
+      </button>
     </div>
+
+    <div class="remote-foot">斷線時將自動重新連線</div>
   </div>
 </template>
 
@@ -88,147 +102,118 @@ onUnmounted(destroy)
 <style scoped>
 #remote-page {
   min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 24px 32px;
+  gap: 24px;
+  background: var(--ink);
+}
+
+.remote-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.remote-title { font-size: 0.95rem; letter-spacing: 0.24em; color: var(--muted); }
+
+.remote-prize-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 20px;
+  border-radius: 20px;
+  background: var(--surface);
+}
+.remote-prize-placeholder { color: var(--muted); font-size: 0.95rem; }
+.prize-label { font-size: 0.875rem; letter-spacing: 0.2em; color: var(--muted); }
+.remote-prize-info .prize-label { color: var(--accent); }
+.prize-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.prize-name {
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 2.2rem;
+  overflow-wrap: anywhere;
+}
+.prize-remaining { font-size: 0.95rem; color: var(--muted); white-space: nowrap; }
+.prize-remaining b { font-family: var(--font-num); font-weight: 800; font-size: 1.75rem; color: var(--cream); }
+.all-drawn { color: var(--muted); }
+
+/* Draw count control */
+.count-block { display: flex; flex-direction: column; gap: 14px; }
+.draw-count-ctrl { display: flex; align-items: center; justify-content: space-between; }
+.count-label-sm { font-size: 1rem; color: var(--muted); margin-left: 6px; }
+.count-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--cream);
+  font-size: 1.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.count-btn:active:not(:disabled) { background: var(--surface); }
+.count-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.count-display {
+  font-family: var(--font-num);
+  font-weight: 800;
+  font-size: 4.5rem;
+  line-height: 1;
+}
+.count-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.preset-btn {
+  height: 44px;
+  border-radius: 22px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--cream);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.preset-btn.active { background: var(--cream); border-color: var(--cream); color: var(--ink); }
+.preset-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+
+/* Big draw button */
+.btn-area { flex: 1; display: flex; align-items: center; justify-content: center; min-height: 240px; }
+.big-red-btn {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 10px solid rgba(232,69,44,0.25);
+  background-clip: padding-box;
+  color: var(--cream-hi);
+  font-family: var(--font-display);
+  font-weight: 900;
+  font-size: 2.5rem;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.2s, opacity 0.2s;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px 20px;
-  gap: 16px;
-  background: var(--bg-dark, #0d0d14);
+  gap: 6px;
+  touch-action: manipulation;
 }
-
-.remote-title {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 1.6rem;
-  letter-spacing: 0.2em;
-  color: var(--gold, #ffd700);
-}
-
-.remote-prize-info {
-  background: rgba(255, 215, 0, 0.06);
-  border: 1px solid rgba(255, 215, 0, 0.15);
-  border-radius: 12px;
-  padding: 12px 24px;
-  text-align: center;
-  min-width: 220px;
-}
-.remote-prize-placeholder {
-  color: rgba(255,255,255,0.3);
-  font-size: 0.82rem;
-}
-.prize-name {
-  font-family: 'Noto Serif TC', serif;
-  font-size: 1.1rem;
-  color: var(--gold, #ffd700);
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-.prize-remaining {
-  font-size: 0.82rem;
-  color: rgba(255,255,255,0.6);
-}
-.prize-remaining b { color: var(--gold, #ffd700); }
-.all-drawn {
-  color: rgba(255,255,255,0.3);
-}
-
-/* Draw count control */
-.draw-count-ctrl {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.count-label-sm {
-  font-size: 0.85rem;
-  color: rgba(255,255,255,0.5);
-}
-.count-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 215, 0, 0.25);
-  background: rgba(255, 215, 0, 0.06);
-  color: var(--gold, #ffd700);
-  font-size: 1.2rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.count-btn:active:not(:disabled) { background: rgba(255, 215, 0, 0.18); }
-.count-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-.count-display {
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 2rem;
-  color: var(--gold, #ffd700);
-  min-width: 40px;
-  text-align: center;
-}
-.count-presets {
-  display: flex;
-  gap: 8px;
-}
-.preset-btn {
-  padding: 6px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 215, 0, 0.2);
-  background: transparent;
-  color: rgba(255,255,255,0.5);
-  font-family: 'Noto Serif TC', serif;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.preset-btn.active {
-  background: rgba(255, 215, 0, 0.12);
-  border-color: var(--gold, #ffd700);
-  color: var(--gold, #ffd700);
-  font-weight: 700;
-}
-.preset-btn:disabled { opacity: 0.2; cursor: not-allowed; }
-
-/* Big draw button */
-.big-red-btn {
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #ff5252, #c62828);
-  border: 4px solid #ff8a80;
-  box-shadow: 0 0 32px rgba(255, 80, 80, 0.5), inset 0 2px 8px rgba(255,255,255,0.15);
-  color: #fff;
-  font-family: 'Bebas Neue', sans-serif;
-  font-size: 2rem;
-  letter-spacing: 0.2em;
-  cursor: pointer;
-  transition: transform 0.1s, box-shadow 0.1s, opacity 0.2s;
-  margin: 8px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.big-red-btn:active:not(:disabled) {
-  transform: scale(0.95);
-  box-shadow: 0 0 16px rgba(255, 80, 80, 0.4);
-}
-.big-red-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.btn-sub { font-family: var(--font-body); font-weight: 500; font-size: 0.875rem; letter-spacing: 0.2em; opacity: 0.85; }
+.big-red-btn:active:not(:disabled) { transform: scale(0.96); }
+.big-red-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .big-red-btn.spinning {
-  animation: btn-pulse 1s ease-in-out infinite;
-  cursor: not-allowed;
-}
-@keyframes btn-pulse {
-  0%, 100% { box-shadow: 0 0 32px rgba(255,80,80,0.5); }
-  50%       { box-shadow: 0 0 52px rgba(255,80,80,0.8), 0 0 80px rgba(255,80,80,0.3); }
+  opacity: 1;
+  background: var(--maroon);
+  border-color: var(--line);
+  font-size: 1.5rem;
 }
 
 /* Spinner inside button */
 .btn-spinner {
   width: 36px;
   height: 36px;
-  border: 4px solid rgba(255,255,255,0.2);
-  border-top-color: #fff;
+  border: 4px solid rgba(255,246,234,0.2);
+  border-top-color: var(--cream-hi);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -239,29 +224,11 @@ onUnmounted(destroy)
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 0.82rem;
-  color: rgba(255,255,255,0.5);
+  font-size: 0.875rem;
+  color: var(--muted);
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-end;
 }
-.reconnect-hint {
-  color: rgba(255,165,0,0.7);
-  font-size: 0.78rem;
-}
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.status-dot.connected { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
-.status-dot.error     { background: #f44336; }
-.status-dot.waiting   { background: #ff9800; animation: pulse 1s ease-in-out infinite; }
-
-.remote-connected { color: #4caf50; }
-.remote-error     { color: #f44336; }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
-}
+.reconnect-hint { color: #E0A040; }
+.remote-foot { text-align: center; font-size: 0.8rem; color: var(--muted); }
 </style>
