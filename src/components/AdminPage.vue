@@ -1016,6 +1016,7 @@ onMounted(() => {
 }
 .title-setting-input {
   flex: 1;
+  min-width: 0;
   background: transparent;
   border: none;
   border-bottom: 1px solid rgba(255,215,0,0.2);
