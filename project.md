@@ -43,7 +43,7 @@ git push origin main
   - `VITE_GOOGLE_CLIENT_ID`
   - `VITE_ADMIN_EMAIL`
 - [ ] **Google OAuth**：Google Cloud Console → OAuth Client → 「已授權的 JavaScript 來源」加入 Vercel 網域，否則 `?admin`、`?vip` 無法登入。
-- [ ] **GAS 中獎查詢網址**：`gas/Form.html` 的 `CHECK_BASE_URL` 仍指向 Netlify（`https://fancy-bombolone-80bcd2.netlify.app/`），改為 Vercel 網域後執行：
+- [x] **GAS 中獎查詢網址**（2026-10-07 已改為 https://lottery-vue.vercel.app/ 並部署 @10）：`gas/Form.html` 的 `CHECK_BASE_URL` 仍指向 Netlify（`https://fancy-bombolone-80bcd2.netlify.app/`），改為 Vercel 網域後執行：
   ```bash
   clasp push
   clasp deploy --deploymentId <見 secret.md> -d v3
