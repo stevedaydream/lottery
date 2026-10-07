@@ -18,14 +18,31 @@ export function useGASSync(state) {
   let saveTimer  = null
   let saveSkip   = false // prevent watch from re-saving after a GAS fetch
 
+  // GAS 偶爾回傳 404／HTML 錯誤頁（剛部署或服務短暫不穩），失敗時自動重試
+  async function getAll(retries = 2) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await fetch(`${GAS_URL}?action=get`, { redirect: 'follow' })
+        if (!res.ok) throw new Error(`GAS 回應 ${res.status}`)
+        try {
+          return await res.json()
+        } catch {
+          throw new Error('GAS 回傳的不是資料（可能尚未部署完成）')
+        }
+      } catch (err) {
+        if (attempt >= retries) throw err
+        await new Promise(r => setTimeout(r, 1500 * (attempt + 1)))
+      }
+    }
+  }
+
   // ── Fetch (GAS → local) ──
   async function fetchAll() {
     if (!GAS_URL) return
     syncing.value = true
     syncErr.value = ''
     try {
-      const res  = await fetch(`${GAS_URL}?action=get`, { redirect: 'follow' })
-      const json = await res.json()
+      const json = await getAll()
       if (!json.ok) { syncErr.value = json.error || 'GAS error'; return }
 
       const d = json.data || {}
@@ -66,8 +83,7 @@ export function useGASSync(state) {
       // 目的：保留表單新報名者，同時尊重管理員的新增/刪除
       if (lastFetchedParticipants !== null) {
         try {
-          const res  = await fetch(`${GAS_URL}?action=get`, { redirect: 'follow' })
-          const json = await res.json()
+          const json = await getAll()
           if (json.ok && typeof json.data?.participants === 'string') {
             const gasNames      = new Set(json.data.participants.split('\n').map(s => s.trim()).filter(Boolean))
             const fetchedNames  = new Set(lastFetchedParticipants.split('\n').map(s => s.trim()).filter(Boolean))
