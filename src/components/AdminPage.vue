@@ -268,7 +268,10 @@
             <!-- 主要輸入列 -->
             <div class="prize-row">
               <input class="rank-input" v-model="prize.rank" placeholder="🎁" />
-              <input class="name-input" v-model="prize.name" placeholder="獎項名稱" />
+              <input class="name-input" :value="prizeTitle(prize)" placeholder="獎項（如：頭獎）" aria-label="獎項"
+                @input="setPrizeParts(prize, $event.target.value, prizeItem(prize))" />
+              <input class="item-input" :value="prizeItem(prize)" placeholder="品項（如：MacBook Pro）" aria-label="品項"
+                @input="setPrizeParts(prize, prizeTitle(prize), $event.target.value)" />
               <div class="total-wrap">
                 <span class="total-label">名額</span>
                 <input class="total-input" type="number" min="1" v-model.number="prize.total" />
@@ -708,38 +711,54 @@ const TAG_PATTERNS = {
   cash:   /^現金/,
 }
 
+// 獎項名稱由「獎項」與「品項」組成，例：頭獎 · MacBook Pro
+// 舊資料沒有 title／item 欄位時，從名稱的「·」拆出
+function prizeTitle(prize) {
+  return prize.title ?? prize.name.split(/\s*[·・]\s*/)[0]
+}
+function prizeItem(prize) {
+  return prize.item ?? prize.name.split(/\s*[·・]\s*/).slice(1).join(' · ')
+}
+function setPrizeParts(prize, title, item) {
+  prize.title = title
+  prize.item = item
+  prize.name = item.trim() ? `${title.trim()} · ${item.trim()}` : title.trim()
+}
+
 function getActiveTag(prize) {
+  const title = prizeTitle(prize)
   for (const [key, re] of Object.entries(TAG_PATTERNS)) {
-    if (re.test(prize.name)) return key
+    if (re.test(title)) return key
   }
   return 'custom'
 }
 
+// 快速標籤只改「獎項」，保留已輸入的品項
 function applyTag(prize, tag) {
   if (tag.key === 'custom') return           // 自訂：不改，讓使用者手動輸入
   if (tag.key === 'cash') {
-    prize.name = `現金 ${getCashAmount(prize).toLocaleString()} 元`
+    setPrizeParts(prize, `現金 ${getCashAmount(prize).toLocaleString()} 元`, prizeItem(prize))
     prize.rank = '💵'
     return
   }
-  prize.name = tag.name
+  setPrizeParts(prize, tag.name, prizeItem(prize))
   prize.rank = tag.rank
 }
 
 function getCashAmount(prize) {
-  const m = prize.name.match(/[\d,]+/)
+  const m = prizeTitle(prize).match(/[\d,]+/)
   return m ? parseInt(m[0].replace(/,/g, '')) : 1000
 }
 
 function adjustCash(prize, delta) {
   const next = Math.max(1000, getCashAmount(prize) + delta)
-  prize.name = `現金 ${next.toLocaleString()} 元`
+  setPrizeParts(prize, `現金 ${next.toLocaleString()} 元`, prizeItem(prize))
   prize.rank = '💵'
 }
 
 // ── Prize management ──
 function addPrize() {
-  prizes.value.push({ id: Date.now(), name: '新獎項', total: 1, winners: [], rank: '🎁' })
+  prizes.value.push({ id: Date.now(), name: '新獎項', title: '新獎項', item: '', total: 1, winners: [], rank: '🎁' })
 }
 
 function deletePrize(idx) {
@@ -1408,7 +1427,21 @@ onMounted(() => {
   outline: none;
   transition: border-color 0.2s;
 }
-.name-input:focus { border-color: rgba(255,215,0,0.35); }
+.name-input:focus, .item-input:focus { border-color: rgba(255,215,0,0.35); }
+.name-input { flex: 0 1 150px; min-width: 0; }
+.item-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  color: var(--text-light);
+  font-family: 'Noto Serif TC', serif;
+  font-size: 0.9rem;
+  padding: 6px 10px;
+  outline: none;
+  transition: border-color 0.2s;
+}
 .total-wrap { display: flex; align-items: center; gap: 6px; }
 .total-label { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
 .total-input {
@@ -1819,7 +1852,7 @@ onMounted(() => {
 
   /* iOS 輸入框字級小於 16px 會自動放大畫面 */
   .admin-textarea, .title-setting-input, .name-input, .total-input,
-  .rank-input, .deadline-input, .claim-search, .claim-filter-select { font-size: 16px; }
+  .rank-input, .item-input, .deadline-input, .claim-search, .claim-filter-select { font-size: 16px; }
   .admin-textarea.large { height: 260px; }
 
   /* 遙控器 */
@@ -1834,6 +1867,7 @@ onMounted(() => {
   /* 獎項：名稱一行、名額與刪除換到第二行 */
   .prize-row { flex-wrap: wrap; }
   .name-input { flex: 1 1 calc(100% - 56px); min-width: 0; }
+  .item-input { flex: 1 1 100%; }
   .won-label { min-width: 0; }
   .icon-btn { width: 40px; height: 40px; margin-left: auto; }
   .tag-btn { padding: 6px 12px; }

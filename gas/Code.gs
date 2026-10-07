@@ -10,7 +10,7 @@
  *
  * 試算表結構（一張分頁一種資料，一列一筆）：
  *   設定        項目 | 值
- *   獎項        ID | 等第 | 獎項名稱 | 名額 | 已抽
+ *   獎項        ID | 等第 | 獎項 | 品項 | 名額 | 已抽
  *   抽獎名單    姓名 | 來源（報名／手動／值班）
  *   中獎紀錄    序號 | 姓名 | 獎項 | 保送 | 中獎時間 | 已兌獎 | 兌獎時間
  *   VIP         姓名 | 類型（保送／後順位）| 指定獎項
@@ -21,7 +21,7 @@
 
 const SHEETS = {
   settings:      { name: '設定',       headers: ['項目', '值'] },
-  prizes:        { name: '獎項',       headers: ['ID', '等第', '獎項名稱', '名額', '已抽'] },
+  prizes:        { name: '獎項',       headers: ['ID', '等第', '獎項', '品項', '名額', '已抽'] },
   participants:  { name: '抽獎名單',   headers: ['姓名', '來源'] },
   winners:       { name: '中獎紀錄',   headers: ['序號', '姓名', '獎項', '保送', '中獎時間', '已兌獎', '兌獎時間'] },
   vip:           { name: 'VIP',        headers: ['姓名', '類型', '指定獎項'] },
@@ -184,16 +184,20 @@ function readAll() {
     .filter(w => w.claimed)
     .map(w => ({ name: w.name, prize: w.prize, claimedAt: w.claimedAt }))
 
-  // 獎項（各獎項的中獎者由中獎紀錄推得）
+  // 獎項（名稱 = 獎項 · 品項；各獎項的中獎者由中獎紀錄推得）
   data.prizes = readRows('prizes')
     .filter(r => String(r[2]).trim())
     .map(r => {
-      const name = String(r[2]).trim()
+      const title = String(r[2]).trim()
+      const item  = String(r[3]).trim()
+      const name  = prizeName(title, item)
       return {
         id:      Number(r[0]) || String(r[0]),
         rank:    toText(r[1]),
         name,
-        total:   Number(r[3]) || 1,
+        title,
+        item,
+        total:   Number(r[4]) || 1,
         winners: winnerRows.filter(w => w.prize === name).map(w => w.name),
       }
     })
@@ -299,13 +303,17 @@ function writeAll(data) {
   // 獎項（已抽數以中獎紀錄計算）
   if (Array.isArray(data.prizes)) {
     const winners = Array.isArray(data.winners) ? data.winners : readWinnerRows()
-    writeRows('prizes', data.prizes.map(p => [
-      p.id,
-      p.rank || '',
-      p.name,
-      Number(p.total) || 1,
-      winners.filter(w => w.prize === p.name).length,
-    ]))
+    writeRows('prizes', data.prizes.map(p => {
+      const [title, item] = splitPrizeName(p)
+      return [
+        p.id,
+        p.rank || '',
+        title,
+        item,
+        Number(p.total) || 1,
+        winners.filter(w => w.prize === p.name).length,
+      ]
+    }))
   }
 
   // 抽獎名單：依值班名單與報名名單標示來源
@@ -347,6 +355,18 @@ function setClaimed(name, prize, claimedAt) {
   })
 }
 
+// 獎項名稱 = 獎項 · 品項（無品項時只有獎項）
+function prizeName(title, item) {
+  return item ? `${title} · ${item}` : title
+}
+
+// 前端有 title／item 就直接用，否則從名稱的「·」拆出
+function splitPrizeName(p) {
+  if (typeof p.title === 'string') return [p.title.trim(), String(p.item || '').trim()]
+  const parts = String(p.name || '').split(/\s*[·・]\s*/)
+  return [parts[0], parts.slice(1).join(' · ')]
+}
+
 function winnerKey(name, prize) {
   return name + '\u0000' + prize
 }
@@ -358,10 +378,25 @@ function winnerKey(name, prize) {
 // 新結構尚未建立時自動執行一次
 function ensureMigrated() {
   const ss = SpreadsheetApp.getActiveSpreadsheet()
+  upgradePrizeSheet()
   if (ss.getSheetByName(SHEETS.settings.name)) return
   const legacy = ss.getSheetByName(LEGACY_SHEET)
   getTable('settings') // 先建立「設定」，之後不再進入遷移
   if (legacy && legacy.getLastRow() > 0) migrateFromLegacy(legacy)
+}
+
+// 「獎項」分頁舊格式（ID|等第|獎項名稱|名額|已抽）→ 新格式（獎項、品項分開）
+function upgradePrizeSheet() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.prizes.name)
+  if (!sheet || String(sheet.getRange(1, 3).getValue()) !== '獎項名稱') return
+  const lastRow = sheet.getLastRow()
+  const old = lastRow > 1 ? sheet.getRange(2, 1, lastRow - 1, 5).getValues() : []
+  sheet.getRange(1, 1, 1, SHEETS.prizes.headers.length)
+    .setValues([SHEETS.prizes.headers]).setFontWeight('bold')
+  writeRows('prizes', old.filter(r => String(r[2]).trim()).map(r => {
+    const [title, item] = splitPrizeName({ name: String(r[2]) })
+    return [r[0], r[1], title, item, r[3], r[4]]
+  }))
 }
 
 function migrateFromLegacy(legacy) {
