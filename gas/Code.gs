@@ -7,14 +7,39 @@
  * doPost action=claimPrize  → 標記已兌獎
  * doPost action=unclaimPrize→ 取消兌獎標記
  * google.script.run         → registerParticipant（表單送出，無 CORS）
+ *
+ * 試算表結構（一張分頁一種資料，一列一筆）：
+ *   設定        項目 | 值
+ *   獎項        ID | 等第 | 獎項名稱 | 名額 | 已抽
+ *   抽獎名單    姓名 | 來源（報名／手動／值班）
+ *   中獎紀錄    序號 | 姓名 | 獎項 | 保送 | 中獎時間 | 已兌獎 | 兌獎時間
+ *   VIP         姓名 | 類型（保送／後順位）| 指定獎項
+ *   報名名單    姓名 | 單位 | 桌號 | 兌獎碼 | 報名時間
+ *   員工白名單  姓名 | 單位 | 值班
+ * 對前端的 JSON 格式與舊版相同，轉換都在本檔完成。
  */
 
-const SHEET_NAME       = '抽獎資料'
-const REGISTRATION_SHEET = '報名名單'
-const EMPLOYEE_SHEET   = '員工白名單'
+const SHEETS = {
+  settings:      { name: '設定',       headers: ['項目', '值'] },
+  prizes:        { name: '獎項',       headers: ['ID', '等第', '獎項名稱', '名額', '已抽'] },
+  participants:  { name: '抽獎名單',   headers: ['姓名', '來源'] },
+  winners:       { name: '中獎紀錄',   headers: ['序號', '姓名', '獎項', '保送', '中獎時間', '已兌獎', '兌獎時間'] },
+  vip:           { name: 'VIP',        headers: ['姓名', '類型', '指定獎項'] },
+  registrations: { name: '報名名單',   headers: ['姓名', '單位', '桌號', '兌獎碼', '報名時間'] },
+  employees:     { name: '員工白名單', headers: ['姓名', '單位', '值班'] },
+}
 
-// 報名名單欄位順序
-const REG_HEADERS = ['姓名', '單位', '桌號', '兌獎碼', '報名時間', '中獎獎項', '已兌獎獎項']
+// 設定分頁：前端欄位 ↔ 表格顯示名稱
+const SETTING_KEYS = [
+  ['eventTitle',           '活動標題'],
+  ['registrationDeadline', '報名截止時間'],
+]
+
+// 舊版 key-value 分頁，遷移後改名保留
+const LEGACY_SHEET        = '抽獎資料'
+const LEGACY_BACKUP_SHEET = '抽獎資料（舊版備份）'
+
+const YES = '是'
 
 // ── GET ──
 function doGet(e) {
@@ -35,24 +60,18 @@ function doGet(e) {
       const code = (e.parameter.code || '').trim().toUpperCase()
       if (!code) return respond({ ok: false, error: '請提供兌獎碼' })
 
-      const allData = readAll()
-      const registrations = allData.registrations || []
-      const reg = registrations.find(r => r.code === code)
+      ensureMigrated()
+      const reg = readRegistrations().find(r => r.code === code)
       if (!reg) return respond({ ok: false, error: '找不到此兌獎碼，請確認輸入是否正確' })
 
-      const winners = allData.winners || []
-      const myWins = winners.filter(w => w.name === reg.name)
-      const claimed = allData.claimedPrizes || []
-
-      const prizes = myWins.map(w => {
-        const record = claimed.find(c => c.name === reg.name && c.prize === w.prize)
-        return {
+      const prizes = readWinnerRows()
+        .filter(w => w.name === reg.name)
+        .map(w => ({
           prize:     w.prize,
-          vip:       w.vip || false,
-          claimed:   !!record,
-          claimedAt: record ? record.claimedAt : null,
-        }
-      })
+          vip:       w.vip,
+          claimed:   w.claimed,
+          claimedAt: w.claimedAt,
+        }))
 
       return respond({ ok: true, name: reg.name, unit: reg.unit, prizes })
     } catch (err) {
@@ -72,32 +91,14 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents)
 
     if (body.action === 'save') {
-      writeAll(body.data)
+      withLock(() => writeAll(body.data || {}))
       return respond({ ok: true })
     }
 
-    if (body.action === 'claimPrize') {
+    if (body.action === 'claimPrize' || body.action === 'unclaimPrize') {
       const { name, prize } = body
       if (!name || !prize) return respond({ ok: false, error: '缺少參數' })
-      const allData = readAll()
-      const claimed = allData.claimedPrizes || []
-      if (!claimed.some(c => c.name === name && c.prize === prize)) {
-        claimed.push({ name, prize, claimedAt: new Date().toISOString() })
-        writeKey('claimedPrizes', claimed)
-        // 同步更新報名名單的兌獎狀態欄
-        updateRegistrationStatus(name, allData.winners || [], claimed)
-      }
-      return respond({ ok: true })
-    }
-
-    if (body.action === 'unclaimPrize') {
-      const { name, prize } = body
-      const allData = readAll()
-      const claimed = (allData.claimedPrizes || [])
-        .filter(c => !(c.name === name && c.prize === prize))
-      writeKey('claimedPrizes', claimed)
-      // 同步更新報名名單的兌獎狀態欄
-      updateRegistrationStatus(name, allData.winners || [], claimed)
+      withLock(() => setClaimed(name, prize, body.action === 'claimPrize' ? new Date() : null))
       return respond({ ok: true })
     }
 
@@ -114,51 +115,38 @@ function registerParticipant(data) {
   const table = (data.table || '').trim()
 
   if (!name) return { ok: false, message: '請填寫姓名' }
-  if (!/[\u4e00-\u9fa5]/.test(name)) {
+  if (!/[一-龥]/.test(name)) {
     return { ok: false, message: '請使用中文姓名填寫，例如：王小明' }
   }
 
-  const allData = readAll()
+  return withLock(() => {
+    ensureMigrated()
 
-  // 比對員工白名單（每行格式：姓名,單位,值班）
-  const employeeNames = (allData.employeeList || '')
-    .split('\n')
-    .map(line => line.split(',')[0].trim())
-    .filter(Boolean)
-  if (employeeNames.length > 0 && !employeeNames.includes(name)) {
-    return { ok: false, message: '查無此員工，請確認是否以中文姓名填寫，或聯絡管理員' }
-  }
-
-  // 防止重複報名
-  const participantsRaw = allData.participants || ''
-  const participantList = participantsRaw.split('\n').map(s => s.trim()).filter(Boolean)
-  if (participantList.includes(name)) {
-    // 已報名：回傳既有兌獎碼
-    const registrations = allData.registrations || []
-    const existing = registrations.find(r => r.name === name)
-    return {
-      ok:      false,
-      message: '您已在抽獎名單中，無需重複報名',
-      code:    existing ? existing.code : null,
+    // 比對員工白名單
+    const employeeNames = readRows('employees').map(r => String(r[0]).trim()).filter(Boolean)
+    if (employeeNames.length > 0 && !employeeNames.includes(name)) {
+      return { ok: false, message: '查無此員工，請確認是否以中文姓名填寫，或聯絡管理員' }
     }
-  }
 
-  // 產生唯一兌獎碼
-  const registrations = allData.registrations || []
-  const existingCodes = registrations.map(r => r.code)
-  const code = generateCode(existingCodes)
+    // 防止重複報名：已報名則回傳既有兌獎碼
+    const registrations = readRegistrations()
+    const participantNames = readRows('participants').map(r => String(r[0]).trim())
+    if (participantNames.includes(name)) {
+      const existing = registrations.find(r => r.name === name)
+      return {
+        ok:      false,
+        message: '您已在抽獎名單中，無需重複報名',
+        code:    existing ? existing.code : null,
+      }
+    }
 
-  // 新增報名列至「報名名單」分頁
-  appendRegistration({ name, unit, table, code })
+    const code = generateCode(registrations.map(r => r.code))
+    getTable('registrations').appendRow([name, unit, table, code, new Date()])
+    getTable('participants').appendRow([name, '報名'])
 
-  // 加入抽獎名單（主資料表）
-  const newParticipants = participantsRaw.trim()
-    ? participantsRaw.trim() + '\n' + name
-    : name
-  writeKey('participants', newParticipants)
-
-  const tableMsg = table ? `（桌號：${table}）` : ''
-  return { ok: true, message: `${name} 報名成功！${unit}${tableMsg} 已加入抽獎名單`, code }
+    const tableMsg = table ? `（桌號：${table}）` : ''
+    return { ok: true, message: `${name} 報名成功！${unit}${tableMsg} 已加入抽獎名單`, code }
+  })
 }
 
 // ── 產生唯一 6 碼兌獎碼（排除易混淆字元）──
@@ -174,191 +162,298 @@ function generateCode(existingCodes) {
   return code
 }
 
-// ── 一次性遷移：將「抽獎資料」中的舊 employeeList 複製至「員工白名單」分頁 ──
-// 在 GAS 編輯器中手動執行一次即可，執行後可刪除此函式
-function migrateEmployeeList() {
-  const mainSheet = getSheet()
-  const lastRow = mainSheet.getLastRow()
-  if (lastRow === 0) { Logger.log('抽獎資料為空，無需遷移'); return }
-  const rows = mainSheet.getRange(1, 1, lastRow, 2).getValues()
-  const row = rows.find(r => r[0] === 'employeeList')
-  if (!row) { Logger.log('找不到 employeeList，無需遷移'); return }
-  let list = ''
-  try { list = JSON.parse(row[1]) } catch { list = row[1] }
-  if (!list || list.trim() === '') { Logger.log('employeeList 為空，無需遷移'); return }
-  // 舊格式只有姓名，遷移時補空的單位和值班欄
-  const migrated = list.split('\n').map(n => n.trim()).filter(Boolean).map(n => n + ',,').join('\n')
-  writeEmployeeList(migrated)
-  Logger.log('遷移完成，共 ' + list.split('\n').filter(Boolean).length + ' 人')
-}
+// ════════════════════════════════════════
+//  讀取：分頁 → 前端 JSON
+// ════════════════════════════════════════
 
-// ── 工具：主資料表（key-value）──
-function getSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet()
-  return ss.getSheetByName(SHEET_NAME) || ss.insertSheet(SHEET_NAME)
-}
+function readAll() {
+  ensureMigrated()
+  const data = {}
 
-// ── 工具：報名名單分頁 ──
-function getRegistrationSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet()
-  let sheet = ss.getSheetByName(REGISTRATION_SHEET)
-  if (!sheet) {
-    sheet = ss.insertSheet(REGISTRATION_SHEET)
-    sheet.getRange(1, 1, 1, REG_HEADERS.length).setValues([REG_HEADERS])
-    sheet.setFrozenRows(1)
-  }
-  return sheet
-}
+  // 設定
+  const settings = {}
+  readRows('settings').forEach(([label, value]) => { settings[String(label)] = value })
+  SETTING_KEYS.forEach(([key, label]) => {
+    if (label in settings) data[key] = toText(settings[label])
+  })
 
-// ── 工具：員工白名單分頁 ──
-function getEmployeeSheet() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet()
-  let sheet = ss.getSheetByName(EMPLOYEE_SHEET)
-  if (!sheet) {
-    sheet = ss.insertSheet(EMPLOYEE_SHEET)
-    sheet.getRange(1, 1, 1, 3).setValues([['姓名', '單位', '值班']])
-    sheet.setFrozenRows(1)
-  }
-  return sheet
-}
+  // 中獎紀錄（同時產生 winners 與 claimedPrizes）
+  const winnerRows = readWinnerRows()
+  data.winners = winnerRows.map(w => ({ id: w.id, name: w.name, prize: w.prize, vip: w.vip }))
+  data.claimedPrizes = winnerRows
+    .filter(w => w.claimed)
+    .map(w => ({ name: w.name, prize: w.prize, claimedAt: w.claimedAt }))
 
-// ── 讀取報名名單（→ 物件陣列）──
-function readRegistrations() {
-  const sheet = getRegistrationSheet()
-  const lastRow = sheet.getLastRow()
-  if (lastRow <= 1) return []
-  const rows = sheet.getRange(2, 1, lastRow - 1, 4).getValues() // 只取前4欄（姓名/單位/桌號/兌獎碼）
-  return rows
-    .filter(r => r[0])
-    .map(r => ({ name: String(r[0]), unit: String(r[1]), table: String(r[2]), code: String(r[3]) }))
-}
-
-// ── 新增報名列 ──
-function appendRegistration(reg) {
-  const sheet = getRegistrationSheet()
-  const now = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy/MM/dd HH:mm:ss')
-  sheet.appendRow([reg.name, reg.unit, reg.table || '', reg.code, now, '', ''])
-}
-
-// ── 讀取員工白名單（→ 換行字串，格式：姓名,單位,值班）──
-function readEmployeeList() {
-  const sheet = getEmployeeSheet()
-  const lastRow = sheet.getLastRow()
-  if (lastRow <= 1) return ''
-  const rows = sheet.getRange(2, 1, lastRow - 1, 3).getValues()
-  return rows
-    .filter(r => String(r[0]).trim())
+  // 獎項（各獎項的中獎者由中獎紀錄推得）
+  data.prizes = readRows('prizes')
+    .filter(r => String(r[2]).trim())
     .map(r => {
-      const name  = String(r[0]).trim()
-      const unit  = String(r[1]).trim()
-      const duty  = String(r[2]).trim()
-      return [name, unit, duty].join(',')
+      const name = String(r[2]).trim()
+      return {
+        id:      Number(r[0]) || String(r[0]),
+        rank:    toText(r[1]),
+        name,
+        total:   Number(r[3]) || 1,
+        winners: winnerRows.filter(w => w.prize === name).map(w => w.name),
+      }
+    })
+
+  // 抽獎名單（來源為「值班」者另組成值班名單）
+  const participantRows = readRows('participants').filter(r => String(r[0]).trim())
+  data.participants = participantRows.map(r => String(r[0]).trim()).join('\n')
+  data.dutyList = participantRows
+    .filter(r => String(r[1]).trim() === '值班')
+    .map(r => String(r[0]).trim())
+    .join('\n')
+
+  // VIP
+  const vipRows = readRows('vip').filter(r => String(r[0]).trim())
+  data.vipGuarantee = vipRows
+    .filter(r => String(r[1]).trim() === '保送')
+    .map(r => {
+      const name = String(r[0]).trim()
+      const prize = String(r[2]).trim()
+      return prize ? `${name}, ${prize}` : name
     })
     .join('\n')
-}
+  data.vipExclude = vipRows
+    .filter(r => String(r[1]).trim() === '後順位')
+    .map(r => String(r[0]).trim())
+    .join('\n')
 
-// ── 寫入員工白名單（換行字串 → 分頁列，格式：姓名,單位,值班）──
-function writeEmployeeList(str) {
-  const sheet = getEmployeeSheet()
-  const lastRow = sheet.getLastRow()
-  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, 3).clearContent()
-  const lines = str.split('\n').map(s => s.trim()).filter(Boolean)
-  if (lines.length > 0) {
-    const rows = lines.map(line => {
-      const parts = line.split(',').map(s => s.trim())
-      return [parts[0] || '', parts[1] || '', parts[2] || '']
-    })
-    sheet.getRange(2, 1, rows.length, 3).setValues(rows)
-  }
-}
-
-// ── 更新報名名單中單一人員的兌獎狀態 ──
-function updateRegistrationStatus(name, winners, claimedPrizes) {
-  const sheet = getRegistrationSheet()
-  const lastRow = sheet.getLastRow()
-  if (lastRow <= 1) return
-  const nameCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues()
-  const rowIdx = nameCol.findIndex(r => String(r[0]) === name)
-  if (rowIdx === -1) return
-  const sheetRow = rowIdx + 2
-  const myWins   = (winners || []).filter(w => w.name === name).map(w => w.prize)
-  const myClaims = (claimedPrizes || []).filter(c => c.name === name).map(c => c.prize)
-  sheet.getRange(sheetRow, 6).setValue(myWins.join(', '))
-  sheet.getRange(sheetRow, 7).setValue(myClaims.join(', '))
-}
-
-// ── 批次同步報名名單的中獎/兌獎狀態（writeAll 時呼叫）──
-function syncAllRegistrationStatus(winners, claimedPrizes) {
-  const sheet = getRegistrationSheet()
-  const lastRow = sheet.getLastRow()
-  if (lastRow <= 1) return
-  const nameCol = sheet.getRange(2, 1, lastRow - 1, 1).getValues()
-  const statusRows = nameCol.map(r => {
-    const n = String(r[0])
-    const myWins   = (winners || []).filter(w => w.name === n).map(w => w.prize)
-    const myClaims = (claimedPrizes || []).filter(c => c.name === n).map(c => c.prize)
-    return [myWins.join(', '), myClaims.join(', ')]
-  })
-  sheet.getRange(2, 6, statusRows.length, 2).setValues(statusRows)
-}
-
-// ── readAll：合併三個分頁的資料 ──
-function readAll() {
-  // 1. 主資料表（key-value）
-  const sheet = getSheet()
-  const lastRow = sheet.getLastRow()
-  const data = {}
-  if (lastRow > 0) {
-    const rows = sheet.getRange(1, 1, lastRow, 2).getValues()
-    rows.forEach(([key, value]) => {
-      if (!key) return
-      try { data[key] = JSON.parse(value) } catch { data[key] = value }
-    })
-  }
-
-  // 2. 報名名單分頁
+  // 報名名單、員工白名單
   data.registrations = readRegistrations()
-
-  // 3. 員工白名單分頁
-  data.employeeList = readEmployeeList()
+  data.employeeList = readRows('employees')
+    .filter(r => String(r[0]).trim())
+    .map(r => [r[0], r[1], r[2]].map(v => String(v).trim()).join(','))
+    .join('\n')
 
   return data
 }
 
-// ── writeAll：主資料表寫 key-value；員工白名單寫分頁；同步報名狀態 ──
-function writeAll(data) {
-  const sheet = getSheet()
-  sheet.clearContents()
-
-  // 寫入 key-value（排除由其他分頁管理的欄位）
-  const skip = new Set(['registrations', 'employeeList'])
-  const rows = Object.entries(data)
-    .filter(([k]) => !skip.has(k))
-    .map(([k, v]) => [k, JSON.stringify(v)])
-  if (rows.length > 0) sheet.getRange(1, 1, rows.length, 2).setValues(rows)
-
-  // 員工白名單
-  if (data.employeeList !== undefined) {
-    writeEmployeeList(data.employeeList)
-  }
-
-  // 同步報名名單的中獎/兌獎狀態
-  syncAllRegistrationStatus(data.winners || [], data.claimedPrizes || [])
+function readWinnerRows() {
+  return readRows('winners')
+    .filter(r => String(r[1]).trim())
+    .map(r => ({
+      id:        Number(r[0]) || String(r[0]),
+      name:      String(r[1]).trim(),
+      prize:     String(r[2]).trim(),
+      vip:       String(r[3]).trim() === YES,
+      wonAt:     r[4],
+      claimed:   String(r[5]).trim() === YES,
+      claimedAt: toIso(r[6]),
+    }))
 }
 
-function writeKey(key, value) {
-  const sheet = getSheet()
-  const lastRow = sheet.getLastRow()
-  if (lastRow > 0) {
-    const rows = sheet.getRange(1, 1, lastRow, 1).getValues()
-    for (let i = 0; i < rows.length; i++) {
-      if (rows[i][0] === key) {
-        sheet.getRange(i + 1, 2).setValue(JSON.stringify(value))
-        return
-      }
-    }
+function readRegistrations() {
+  return readRows('registrations')
+    .filter(r => String(r[0]).trim())
+    .map(r => ({
+      name:  String(r[0]).trim(),
+      unit:  String(r[1]).trim(),
+      table: String(r[2]).trim(),
+      code:  String(r[3]).trim(),
+    }))
+}
+
+// ════════════════════════════════════════
+//  寫入：前端 JSON → 分頁（只寫有傳入的欄位）
+// ════════════════════════════════════════
+
+function writeAll(data) {
+  ensureMigrated()
+
+  // 設定：只更新已知項目，保留表中其他列
+  const changedSettings = SETTING_KEYS.filter(([key]) => data[key] !== undefined)
+  if (changedSettings.length) {
+    const rows = readRows('settings')
+    changedSettings.forEach(([key, label]) => {
+      const row = rows.find(r => String(r[0]) === label)
+      if (row) row[1] = String(data[key])
+      else rows.push([label, String(data[key])])
+    })
+    // 值欄以純文字儲存，避免日期被自動轉換格式
+    getTable('settings').getRange(2, 2, rows.length, 1).setNumberFormat('@')
+    writeRows('settings', rows)
   }
-  sheet.appendRow([key, JSON.stringify(value)])
+
+  // 中獎紀錄：沿用既有的中獎時間與兌獎狀態（以 姓名＋獎項 對應）
+  if (Array.isArray(data.winners)) {
+    const existing = {}
+    readWinnerRows().forEach(w => { existing[winnerKey(w.name, w.prize)] = w })
+    const now = new Date()
+    writeRows('winners', data.winners.map(w => {
+      const old = existing[winnerKey(w.name, w.prize)]
+      return [
+        w.id,
+        w.name,
+        w.prize,
+        w.vip ? YES : '',
+        old && old.wonAt ? old.wonAt : now,
+        old && old.claimed ? YES : '',
+        old && old.claimedAt ? new Date(old.claimedAt) : '',
+      ]
+    }))
+  }
+
+  // 獎項（已抽數以中獎紀錄計算）
+  if (Array.isArray(data.prizes)) {
+    const winners = Array.isArray(data.winners) ? data.winners : readWinnerRows()
+    writeRows('prizes', data.prizes.map(p => [
+      p.id,
+      p.rank || '',
+      p.name,
+      Number(p.total) || 1,
+      winners.filter(w => w.prize === p.name).length,
+    ]))
+  }
+
+  // 抽獎名單：依值班名單與報名名單標示來源
+  if (typeof data.participants === 'string') {
+    const registered = new Set(readRegistrations().map(r => r.name))
+    const duty = new Set(splitLines(data.dutyList))
+    writeRows('participants', splitLines(data.participants).map(name => [
+      name,
+      duty.has(name) ? '值班' : registered.has(name) ? '報名' : '手動',
+    ]))
+  }
+
+  // VIP
+  if (typeof data.vipGuarantee === 'string' || typeof data.vipExclude === 'string') {
+    const rows = []
+    splitLines(data.vipGuarantee).forEach(line => {
+      const [name, prize = ''] = line.split(',').map(s => s.trim())
+      if (name) rows.push([name, '保送', prize])
+    })
+    splitLines(data.vipExclude).forEach(name => rows.push([name, '後順位', '']))
+    writeRows('vip', rows)
+  }
+
+  // 員工白名單
+  if (typeof data.employeeList === 'string') {
+    writeRows('employees', splitLines(data.employeeList).map(line => {
+      const parts = line.split(',').map(s => s.trim())
+      return [parts[0] || '', parts[1] || '', parts[2] || '']
+    }))
+  }
+}
+
+// ── 標記（claimedAt 為時間）或取消（null）兌獎 ──
+function setClaimed(name, prize, claimedAt) {
+  const sheet = getTable('winners')
+  readRows('winners').forEach((r, i) => {
+    if (String(r[1]).trim() !== name || String(r[2]).trim() !== prize) return
+    sheet.getRange(i + 2, 6, 1, 2).setValues([[claimedAt ? YES : '', claimedAt || '']])
+  })
+}
+
+function winnerKey(name, prize) {
+  return name + '\u0000' + prize
+}
+
+// ════════════════════════════════════════
+//  舊版遷移（「抽獎資料」key-value 分頁 → 新分頁）
+// ════════════════════════════════════════
+
+// 新結構尚未建立時自動執行一次
+function ensureMigrated() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet()
+  if (ss.getSheetByName(SHEETS.settings.name)) return
+  const legacy = ss.getSheetByName(LEGACY_SHEET)
+  getTable('settings') // 先建立「設定」，之後不再進入遷移
+  if (legacy && legacy.getLastRow() > 0) migrateFromLegacy(legacy)
+}
+
+function migrateFromLegacy(legacy) {
+  const old = {}
+  legacy.getRange(1, 1, legacy.getLastRow(), 2).getValues().forEach(([key, value]) => {
+    if (!key) return
+    try { old[key] = JSON.parse(value) } catch (e) { old[key] = value }
+  })
+
+  writeAll({
+    eventTitle:   typeof old.eventTitle === 'string' ? old.eventTitle : undefined,
+    winners:      Array.isArray(old.winners) ? old.winners : [],
+    prizes:       Array.isArray(old.prizes) ? old.prizes : [],
+    participants: typeof old.participants === 'string' ? old.participants : '',
+    vipGuarantee: typeof old.vipGuarantee === 'string' ? old.vipGuarantee : '',
+    vipExclude:   typeof old.vipExclude === 'string' ? old.vipExclude : '',
+  })
+
+  // 補上舊的兌獎紀錄
+  ;(Array.isArray(old.claimedPrizes) ? old.claimedPrizes : []).forEach(c => {
+    setClaimed(c.name, c.prize, c.claimedAt ? new Date(c.claimedAt) : new Date())
+  })
+
+  // 報名名單移除舊的「中獎獎項」「已兌獎獎項」欄（已併入中獎紀錄）
+  const reg = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEETS.registrations.name)
+  if (reg && reg.getLastColumn() >= 7 && String(reg.getRange(1, 6).getValue()) === '中獎獎項') {
+    reg.deleteColumns(6, 2)
+  }
+
+  legacy.setName(LEGACY_BACKUP_SHEET)
+  Logger.log('遷移完成，舊資料保留於「' + LEGACY_BACKUP_SHEET + '」分頁')
+}
+
+// ════════════════════════════════════════
+//  工具
+// ════════════════════════════════════════
+
+// 取得分頁；不存在時建立並寫好標題列
+function getTable(key) {
+  const def = SHEETS[key]
+  const ss = SpreadsheetApp.getActiveSpreadsheet()
+  let sheet = ss.getSheetByName(def.name)
+  if (!sheet) {
+    sheet = ss.insertSheet(def.name)
+    sheet.getRange(1, 1, 1, def.headers.length).setValues([def.headers]).setFontWeight('bold')
+    sheet.setFrozenRows(1)
+  }
+  return sheet
+}
+
+// 讀取標題列以下的資料列
+function readRows(key) {
+  const sheet = getTable(key)
+  const lastRow = sheet.getLastRow()
+  if (lastRow <= 1) return []
+  return sheet.getRange(2, 1, lastRow - 1, SHEETS[key].headers.length).getValues()
+}
+
+// 以 rows 取代標題列以下的全部資料
+function writeRows(key, rows) {
+  const sheet = getTable(key)
+  const width = SHEETS[key].headers.length
+  const lastRow = sheet.getLastRow()
+  if (lastRow > 1) sheet.getRange(2, 1, lastRow - 1, width).clearContent()
+  if (rows.length > 0) sheet.getRange(2, 1, rows.length, width).setValues(rows)
+}
+
+function splitLines(str) {
+  return String(str || '').split('\n').map(s => s.trim()).filter(Boolean)
+}
+
+function toText(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), "yyyy-MM-dd'T'HH:mm")
+  return String(v)
+}
+
+function toIso(v) {
+  if (!v) return null
+  if (v instanceof Date) return v.toISOString()
+  const d = new Date(v)
+  return isNaN(d.getTime()) ? String(v) : d.toISOString()
+}
+
+// 避免報名與管理員存檔同時寫入互相覆蓋
+function withLock(fn) {
+  const lock = LockService.getScriptLock()
+  lock.waitLock(20000)
+  try {
+    return fn()
+  } finally {
+    lock.releaseLock()
+  }
 }
 
 function respond(data) {

@@ -40,6 +40,8 @@ export function useGASSync(state) {
       if (typeof d.vipExclude === 'string')     state.vipExclude.value     = d.vipExclude
       if (typeof d.employeeList === 'string')   state.employeeList.value   = d.employeeList
       if (typeof d.eventTitle === 'string')     state.eventTitle.value     = d.eventTitle
+      if (typeof d.dutyList === 'string')       state.dutyList.value       = d.dutyList
+      if (typeof d.registrationDeadline === 'string') state.registrationDeadline.value = d.registrationDeadline
       saveSkip = false
 
       lastSync.value = new Date()
@@ -105,6 +107,8 @@ export function useGASSync(state) {
           vipExclude:   state.vipExclude.value,
           employeeList: state.employeeList.value,
           eventTitle:   state.eventTitle.value,
+          dutyList:     state.dutyList.value,
+          registrationDeadline: state.registrationDeadline.value,
         },
       })
       fetch(GAS_URL, { method: 'POST', body, mode: 'no-cors' })
@@ -115,7 +119,7 @@ export function useGASSync(state) {
 
   // Watch all shared state
   watch(
-    [state.participantsRaw, state.prizes, state.allWinners, state.vipGuarantee, state.vipExclude, state.employeeList, state.eventTitle],
+    [state.participantsRaw, state.prizes, state.allWinners, state.vipGuarantee, state.vipExclude, state.employeeList, state.eventTitle, state.dutyList, state.registrationDeadline],
     scheduleSave,
     { deep: true }
   )
