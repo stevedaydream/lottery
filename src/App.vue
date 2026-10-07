@@ -494,11 +494,31 @@ const adminQrUrl = computed(() =>
 // ── 報名表單 URL ──
 const gasUrl = import.meta.env.VITE_GAS_URL || ''
 
+// ── 實體按鈕／簡報筆：模擬鍵盤按鍵觸發抽獎 ──
+// 同一顆鍵：平時開抽，結果畫面出現時為「確認」
+const TRIGGER_KEYS = new Set(['PageDown', 'ArrowRight', ' ', 'Enter'])
+function onTriggerKey(e) {
+  if (!TRIGGER_KEYS.has(e.key) || e.repeat) return
+  // 在輸入欄位時不攔截（避免打字誤觸）；焦點在按鈕上時，空白鍵／Enter 留給按鈕本身
+  const tag = e.target?.tagName
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || e.target?.isContentEditable) return
+  if (tag === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return
+  if (showAdminQr.value || showPrizeModal.value) return
+  e.preventDefault()
+  if (showResult.value) closeResult()
+  else startDraw()
+}
+
+const isMainDisplay = !isRemotePage && !isAdminPage && !isVIPPage && !isCheckPage
 onMounted(() => {
-  if (!isRemotePage && !isAdminPage && !isVIPPage && !isCheckPage) initPeer()
+  if (!isMainDisplay) return
+  initPeer()
+  window.addEventListener('keydown', onTriggerKey)
 })
 onUnmounted(() => {
-  if (!isRemotePage && !isAdminPage && !isVIPPage && !isCheckPage) destroyPeer()
+  if (!isMainDisplay) return
+  destroyPeer()
+  window.removeEventListener('keydown', onTriggerKey)
 })
 </script>
 
